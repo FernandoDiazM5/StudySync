@@ -1,10 +1,9 @@
 // ============================================
 // CHAT SCREEN - StudySync
-// Migración de líneas 885-993 del frontend React
-// Chat en tiempo real con Firestore onSnapshot
+// Input fijo al teclado + chat ocupa toda la pantalla
 // ============================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -15,110 +14,239 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
-} from 'react-native';
-import {
-  ChevronLeft,
-  Send,
-  Star,
-  Users,
-  Paperclip,
-} from 'lucide-react-native';
-import { useAuth } from '../../contexts/AuthContext';
-import * as firestoreService from '../../services/firestoreService';
-import { formatTime } from '../../utils/dateUtils';
+  Keyboard,
+  Modal,
+  Alert,
+  Vibration,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChevronLeft, Send, Star, UsersRound, Paperclip, Pencil, Trash2 } from "lucide-react-native";
+import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import * as firestoreService from "../../services/firestoreService";
+import { formatTime } from "../../utils/dateUtils";
 
 export default function ChatScreen({ route, navigation }) {
   const { groupId } = route.params;
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
+  const { theme, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+
   const [group, setGroup] = useState(null);
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
-  const [inputText, setInputText] = useState('');
+  const [onlineMembers, setOnlineMembers] = useState([]);
+  const [showOnline, setShowOnline] = useState(false);
+  const [hasInput, setHasInput] = useState(false);
+  const [actionMsg, setActionMsg] = useState(null);   // mensaje seleccionado con long press
+  const [editingMsg, setEditingMsg] = useState(null); // mensaje en modo edición
+  const [editText, setEditText] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const inputValueRef = useRef("");
+  const textInputRef = useRef(null);
   const flatListRef = useRef(null);
 
+  // Cargar grupo y mensajes
   useEffect(() => {
     let cancelled = false;
+    let unsubOnline = () => {};
 
-    // Cargar datos del grupo
     const loadGroup = async () => {
       try {
         const groupData = await firestoreService.getGroup(groupId);
         if (cancelled) return;
         setGroup(groupData);
+
         if (groupData?.members) {
-          const memberData = await firestoreService.getUsersByIds(groupData.members);
+          const memberData = await firestoreService.getUsersByIds(
+            groupData.members,
+          );
           if (cancelled) return;
           setMembers(memberData);
+
+          // Escuchar miembros en línea
+          unsubOnline = firestoreService.getOnlineMembers(
+            groupId,
+            groupData.members,
+            (online) => { if (!cancelled) setOnlineMembers(online); }
+          );
         }
       } catch (e) {
-        console.error('Error cargando grupo:', e);
+        console.error("Error cargando grupo:", e);
       }
     };
     loadGroup();
 
-    // Escuchar mensajes en tiempo real
-    const unsubMessages = firestoreService.getGroupMessages(groupId, (fetchedMessages) => {
-      if (cancelled) return;
-      setMessages(fetchedMessages);
-    });
-
-    // Marcar mensajes como leídos
+    // Marcar presencia
     if (user?.uid) {
-      firestoreService.markMessagesAsRead(groupId, user.uid).catch((e) =>
-        console.error('Error marcando mensajes como leídos:', e)
-      );
+      firestoreService.setUserPresence(user.uid, groupId).catch(() => {});
+
+      // Refrescar presencia cada 90 segundos
+      const presenceInterval = setInterval(() => {
+        if (!cancelled) firestoreService.setUserPresence(user.uid, groupId).catch(() => {});
+      }, 90000);
+
+      var clearPresence = () => {
+        clearInterval(presenceInterval);
+        firestoreService.clearUserPresence(user.uid).catch(() => {});
+      };
+    }
+
+    const unsubMessages = firestoreService.getGroupMessages(
+      groupId,
+      (fetchedMessages) => {
+        if (cancelled) return;
+        setMessages(fetchedMessages);
+      },
+    );
+
+    if (user?.uid) {
+      firestoreService
+        .markMessagesAsRead(groupId, user.uid)
+        .catch((e) => console.error("Error marcando mensajes como leídos:", e));
     }
 
     return () => {
       cancelled = true;
       unsubMessages();
+      unsubOnline();
+      clearPresence?.();
     };
   }, [groupId, user]);
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    const textToSend = inputValueRef.current.trim();
+    if (!textToSend) return;
 
-    const messageData = {
-      groupId: groupId,
-      authorId: user.uid,
-      text: inputText.trim(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      important: false,
-    };
+    textInputRef.current?.clear();
+    inputValueRef.current = "";
+    setHasInput(false);
 
-    setInputText('');
-    await firestoreService.sendMessage(messageData);
+    try {
+      await firestoreService.sendMessage({
+        groupId,
+        authorId: user.uid,
+        text: textToSend,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        important: false,
+      });
+    } catch (e) {
+      console.error("Error enviando mensaje:", e);
+    }
+    textInputRef.current?.focus();
   };
 
   const handleToggleImportant = async (msgId, currentValue) => {
     await firestoreService.toggleMessageImportant(msgId, currentValue);
   };
 
-  const getMemberName = (authorId) => {
-    const member = members.find(m => m.id === authorId);
-    return member?.name || 'Usuario';
+  const handleLongPress = (msg) => {
+    if (msg.authorId !== user.uid) return; // solo mensajes propios
+    Vibration.vibrate(40);
+    setActionMsg(msg);
   };
 
-  const isLeaderMember = (authorId) => {
-    return group?.leaderId === authorId;
+  const handleStartEdit = () => {
+    setEditText(actionMsg.text);
+    setEditingMsg(actionMsg);
+    setActionMsg(null);
   };
 
-  /**
-   * Renderizar texto del mensaje con @menciones resaltadas
-   */
-  const renderMessageText = (text, isMe) => {
-    const parts = text.split(/(@\w+)/g);
-    return (
-      <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
-        {parts.map((part, index) =>
-          part.startsWith('@') ? (
-            <Text key={index} style={styles.mention}>{part}</Text>
-          ) : (
-            <Text key={index}>{part}</Text>
-          )
-        )}
-      </Text>
+  const handleSaveEdit = async () => {
+    if (!editText.trim() || editText.trim() === editingMsg.text) {
+      setEditingMsg(null);
+      return;
+    }
+    setEditLoading(true);
+    try {
+      await firestoreService.editMessage(editingMsg.id, editText);
+    } catch (e) {
+      console.error("Error editando mensaje:", e);
+    }
+    setEditLoading(false);
+    setEditingMsg(null);
+  };
+
+  const handleDelete = () => {
+    const msg = actionMsg;
+    setActionMsg(null);
+    Alert.alert(
+      "Eliminar mensaje",
+      "¿Seguro que quieres eliminar este mensaje?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await firestoreService.deleteMessage(msg.id);
+            } catch (e) {
+              console.error("Error eliminando mensaje:", e);
+            }
+          },
+        },
+      ]
     );
+  };
+
+  const getMemberName = (authorId) => {
+    const member = members.find((m) => m.id === authorId);
+    return member?.name || "Usuario";
+  };
+
+  const isLeaderMember = (authorId) => group?.leaderId === authorId;
+
+  // ── Separadores de fecha ──────────────────────────────────────
+  const getDateKey = (createdAt) => {
+    if (!createdAt) return "unknown";
+    return createdAt.split("T")[0]; // YYYY-MM-DD
+  };
+
+  const formatSeparatorLabel = (dateKey) => {
+    if (dateKey === "unknown") return "";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const date = new Date(dateKey + "T00:00:00");
+    if (date.toDateString() === today.toDateString()) return "Hoy";
+    if (date.toDateString() === yesterday.toDateString()) return "Ayer";
+    if (date.getFullYear() === today.getFullYear())
+      return date.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
+    return date.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+  };
+
+  const buildMessageList = (msgs) => {
+    const result = [];
+    let lastDate = null;
+    for (const msg of msgs) {
+      const dateKey = getDateKey(msg.createdAt);
+      if (dateKey !== lastDate) {
+        result.push({ type: "separator", id: `sep_${dateKey}`, label: formatSeparatorLabel(dateKey) });
+        lastDate = dateKey;
+      }
+      result.push(msg);
+    }
+    return result;
+  };
+
+  const renderItem = ({ item }) => {
+    if (item.type === "separator") {
+      return (
+        <View style={styles.dateSeparator}>
+          <View style={[styles.dateSeparatorLine, { backgroundColor: isDark ? "#374151" : "#D1D5DB" }]} />
+          <View style={[styles.dateSeparatorChip, { backgroundColor: isDark ? "#374151" : "#E5E7EB" }]}>
+            <Text style={[styles.dateSeparatorText, { color: theme.textSecondary }]}>{item.label}</Text>
+          </View>
+          <View style={[styles.dateSeparatorLine, { backgroundColor: isDark ? "#374151" : "#D1D5DB" }]} />
+        </View>
+      );
+    }
+    return renderMessage({ item });
   };
 
   const renderMessage = ({ item: msg }) => {
@@ -127,54 +255,87 @@ export default function ChatScreen({ route, navigation }) {
     const isLeader = isLeaderMember(msg.authorId);
 
     return (
-      <View style={[styles.messageWrapper, isMe ? styles.messageWrapperMe : styles.messageWrapperOther]}>
+      <View
+        style={[
+          styles.messageWrapper,
+          isMe ? styles.messageWrapperMe : styles.messageWrapperOther,
+        ]}
+      >
         {!isMe && (
-          <Text style={styles.authorName}>
-            {authorName} {isLeader ? '(Líder)' : ''}
+          <Text style={[styles.authorName, { color: theme.textSecondary }]}>
+            {authorName} {isLeader ? "(Líder)" : ""}
           </Text>
         )}
-        <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-          <View style={styles.messageContent}>
+        <TouchableOpacity
+          onLongPress={() => handleLongPress(msg)}
+          activeOpacity={0.85}
+          delayLongPress={350}
+        >
+          <View
+            style={[styles.bubble, isMe ? styles.bubbleMe : [styles.bubbleOther, { backgroundColor: theme.card, borderColor: theme.border }]]}
+          >
             <View style={styles.messageTextContainer}>
-              {renderMessageText(msg.text, isMe)}
+              <Text style={[styles.messageText, isMe ? styles.messageTextMe : { color: theme.text }]}>
+                {msg.text.split(/(@\w+)/g).map((part, index) =>
+                  part.startsWith("@") ? (
+                    <Text key={index} style={styles.mention}>{part}</Text>
+                  ) : (
+                    <Text key={index}>{part}</Text>
+                  ),
+                )}
+              </Text>
             </View>
             <TouchableOpacity
               onPress={() => handleToggleImportant(msg.id, msg.important)}
-              style={styles.starButton}
+              style={styles.starButtonAbsolute}
             >
               <Star
-                color={msg.important ? '#FACC15' : (isMe ? 'rgba(165,180,252,0.5)' : '#D1D5DB')}
+                color={
+                  msg.important
+                    ? "#FACC15"
+                    : isMe
+                      ? "rgba(165,180,252,0.5)"
+                      : "#D1D5DB"
+                }
                 size={16}
-                fill={msg.important ? '#FACC15' : 'none'}
+                fill={msg.important ? "#FACC15" : "none"}
               />
             </TouchableOpacity>
+            <View style={styles.messageFooter}>
+              {msg.edited && (
+                <Text style={[styles.editedLabel, isMe ? styles.editedLabelMe : styles.editedLabelOther]}>
+                  editado
+                </Text>
+              )}
+              <Text
+                style={[
+                  styles.messageTime,
+                  isMe ? styles.messageTimeMe : styles.messageTimeOther,
+                ]}
+              >
+                {msg.time || formatTime(msg.createdAt)}
+              </Text>
+            </View>
           </View>
-          <Text style={[styles.messageTime, isMe ? styles.messageTimeMe : styles.messageTimeOther]}>
-            {msg.time || formatTime(msg.createdAt)}
-          </Text>
-        </View>
+        </TouchableOpacity>
       </View>
     );
   };
 
   if (!group) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Cargando chat...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: isDark ? "#111827" : "#E5E7EB" }]}>
+        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Cargando chat...</Text>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
+    <View style={[styles.container, { backgroundColor: isDark ? "#111827" : "#E5E7EB" }]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.headerBg }]}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -182,253 +343,600 @@ export default function ChatScreen({ route, navigation }) {
           >
             <ChevronLeft color="#FFFFFF" size={24} />
           </TouchableOpacity>
-          <View>
-            <Text style={styles.headerTitle}>Chat - {group.name}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {group.name}
+            </Text>
             <Text style={styles.headerSubtitle}>Solo temas académicos</Text>
           </View>
         </View>
-        <Users color="#C7D2FE" size={20} />
+        <TouchableOpacity onPress={() => setShowOnline(true)} style={{ marginLeft: 10 }}>
+          <UsersRound color="#C7D2FE" size={20} />
+          {onlineMembers.length > 0 && (
+            <View style={styles.onlineDot} />
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* Messages */}
+      {/* Mensajes */}
       <FlatList
         ref={flatListRef}
-        data={messages}
+        style={styles.messagesContainer}
+        data={buildMessageList(messages)}
         keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.messagesList}
+        renderItem={renderItem}
+        contentContainerStyle={[styles.messagesList, { paddingBottom: 8 }]}
         showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        scrollEnabled
+        nestedScrollEnabled
+        keyboardDismissMode="on-drag"
+        onContentSizeChange={() =>
+          flatListRef.current?.scrollToEnd({ animated: false })
+        }
         ListHeaderComponent={
           <View style={styles.reminderBanner}>
             <Text style={styles.reminderText}>
-              💡 Recordatorio: Este chat es exclusivo para coordinar el trabajo de <Text style={styles.reminderBold}>{group.name}</Text>.
+              💡 Recordatorio: Este chat es exclusivo para coordinar el trabajo
+              de <Text style={styles.reminderBold}>{group.name}</Text>.
             </Text>
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyChat}>
-            <Text style={styles.emptyChatText}>No hay mensajes aún. ¡Sé el primero en escribir!</Text>
+            <Text style={[styles.emptyChatText, { color: theme.textSecondary }]}>
+              No hay mensajes aún. ¡Sé el primero en escribir!
+            </Text>
           </View>
         }
       />
 
-      {/* Input */}
-      <View style={styles.inputBar}>
-        <TouchableOpacity style={styles.attachButton}>
-          <Paperclip color="#9CA3AF" size={20} />
-        </TouchableOpacity>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            style={styles.textInput}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Escribe un mensaje..."
-            placeholderTextColor="#9CA3AF"
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            style={styles.sendButton}
-            disabled={!inputText.trim()}
-          >
-            <Send
-              color={inputText.trim() ? '#4F46E5' : '#9CA3AF'}
-              size={20}
-            />
+      {/* Input pegado al teclado */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={insets.bottom}
+      >
+        <View
+          style={[
+            styles.inputBar,
+            { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: theme.card, borderTopColor: theme.border },
+          ]}
+        >
+          <TouchableOpacity style={styles.attachButton}>
+            <Paperclip color={theme.textMuted} size={20} />
           </TouchableOpacity>
+          <View style={[styles.inputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
+            <TextInput
+              ref={textInputRef}
+              style={[styles.textInput, { color: theme.text }]}
+              onChangeText={(text) => {
+                inputValueRef.current = text;
+                setHasInput(text.trim().length > 0);
+              }}
+              placeholder="Escribe un mensaje..."
+              placeholderTextColor={theme.textMuted}
+              blurOnSubmit={false}
+              multiline
+              maxLength={500}
+              textAlignVertical="top"
+              scrollEnabled={false}
+              underlineColorAndroid="transparent"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              onPress={handleSend}
+              style={styles.sendButton}
+              disabled={!hasInput}
+            >
+              <Send color={hasInput ? "#4F46E5" : "#9CA3AF"} size={20} />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+
+      {/* Action sheet: editar / eliminar mensaje propio */}
+      <Modal
+        visible={!!actionMsg}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setActionMsg(null)}
+      >
+        <TouchableOpacity
+          style={styles.actionOverlay}
+          activeOpacity={1}
+          onPress={() => setActionMsg(null)}
+        >
+          <View style={[styles.actionSheet, { backgroundColor: theme.card }]}>
+            <View style={[styles.actionHandle, { backgroundColor: theme.border }]} />
+            <Text style={[styles.actionPreview, { color: theme.textMuted }]} numberOfLines={2}>
+              {actionMsg?.text}
+            </Text>
+            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
+            <TouchableOpacity style={styles.actionRow} onPress={handleStartEdit}>
+              <Pencil color="#4F46E5" size={20} />
+              <Text style={[styles.actionLabel, { color: theme.text }]}>Editar mensaje</Text>
+            </TouchableOpacity>
+            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
+            <TouchableOpacity style={styles.actionRow} onPress={handleDelete}>
+              <Trash2 color="#DC2626" size={20} />
+              <Text style={[styles.actionLabel, { color: "#DC2626" }]}>Eliminar mensaje</Text>
+            </TouchableOpacity>
+            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
+            <TouchableOpacity style={styles.actionRow} onPress={() => setActionMsg(null)}>
+              <Text style={[styles.actionCancel, { color: theme.textSecondary }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal edición de mensaje */}
+      <Modal
+        visible={!!editingMsg}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setEditingMsg(null)}
+      >
+        <View style={styles.editOverlay}>
+          <View style={[styles.editCard, { backgroundColor: theme.card }]}>
+            <Text style={[styles.editTitle, { color: theme.text }]}>Editar mensaje</Text>
+            <TextInput
+              style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+              value={editText}
+              onChangeText={setEditText}
+              multiline
+              autoFocus
+              maxLength={500}
+              placeholderTextColor={theme.textMuted}
+            />
+            <View style={styles.editActions}>
+              <TouchableOpacity
+                style={[styles.editBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]}
+                onPress={() => setEditingMsg(null)}
+                disabled={editLoading}
+              >
+                <Text style={[styles.editBtnCancel, { color: theme.text }]}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editBtn, styles.editBtnSave, editLoading && { opacity: 0.6 }]}
+                onPress={handleSaveEdit}
+                disabled={editLoading}
+              >
+                <Text style={styles.editBtnSaveText}>{editLoading ? "Guardando..." : "Guardar"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal miembros en línea */}
+      <Modal
+        visible={showOnline}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowOnline(false)}
+      >
+        <TouchableOpacity
+          style={styles.onlineOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOnline(false)}
+        >
+          <View style={[styles.onlinePanel, { backgroundColor: theme.card }]}>
+            <Text style={[styles.onlineTitle, { color: "#4F46E5", borderBottomColor: theme.border }]}>Miembros del grupo</Text>
+
+            {/* Conectados */}
+            <Text style={styles.onlineSectionLabel}>
+              🟢 Conectados ({onlineMembers.length})
+            </Text>
+            {onlineMembers.length === 0 ? (
+              <Text style={styles.onlineEmpty}>Nadie conectado</Text>
+            ) : (
+              onlineMembers.map((m) => (
+                <View key={m.id} style={styles.onlineMemberRow}>
+                  <View style={styles.onlineIndicator} />
+                  <Text style={[styles.onlineMemberName, { color: theme.text }]}>{m.name}</Text>
+                  {m.id === group?.leaderId && (
+                    <View style={styles.onlineLeaderBadge}>
+                      <Text style={styles.onlineLeaderText}>Líder</Text>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+
+            <View style={[styles.onlineDivider, { backgroundColor: theme.border }]} />
+
+            {/* Desconectados */}
+            {(() => {
+              const onlineIds = onlineMembers.map(m => m.id);
+              const offline = members.filter(m => !onlineIds.includes(m.id));
+              return (
+                <>
+                  <Text style={styles.offlineSectionLabel}>
+                    ⚫ Desconectados ({offline.length})
+                  </Text>
+                  {offline.length === 0 ? (
+                    <Text style={styles.onlineEmpty}>Todos conectados</Text>
+                  ) : (
+                    offline.map((m) => (
+                      <View key={m.id} style={styles.onlineMemberRow}>
+                        <View style={styles.offlineIndicator} />
+                        <Text style={[styles.offlineMemberName, { color: theme.textMuted }]}>{m.name}</Text>
+                        {m.id === group?.leaderId && (
+                          <View style={styles.onlineLeaderBadge}>
+                            <Text style={styles.onlineLeaderText}>Líder</Text>
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  )}
+                </>
+              );
+            })()}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#E5E7EB',
-  },
+  container: { flex: 1, backgroundColor: "#E5E7EB" },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#E5E7EB',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#E5E7EB",
   },
-  loadingText: {
-    color: '#6B7280',
-    fontSize: 14,
-  },
+  loadingText: { color: "#6B7280", fontSize: 14 },
   header: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: "#4F46E5",
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingTop: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  backButton: {
-    padding: 4,
-    borderRadius: 8,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#C7D2FE',
-    marginTop: 1,
-  },
-  messagesList: {
-    padding: 16,
-    paddingBottom: 8,
-  },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  backButton: { padding: 4, borderRadius: 8 },
+  headerTitle: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
+  headerSubtitle: { fontSize: 12, color: "#C7D2FE", marginTop: 1 },
+  messagesContainer: { flex: 1 },
+  messagesList: { padding: 16 },
   reminderBanner: {
-    backgroundColor: '#FEF9C3',
+    backgroundColor: "#FEF9C3",
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: "#FDE68A",
     borderRadius: 10,
     padding: 10,
     marginBottom: 16,
     marginHorizontal: 8,
   },
-  reminderText: {
-    fontSize: 12,
-    color: '#92400E',
-    textAlign: 'center',
-  },
-  reminderBold: {
-    fontWeight: '700',
-  },
-  // Messages
-  messageWrapper: {
-    maxWidth: '85%',
-    marginBottom: 12,
-  },
-  messageWrapperMe: {
-    alignSelf: 'flex-end',
-    alignItems: 'flex-end',
-  },
-  messageWrapperOther: {
-    alignSelf: 'flex-start',
-    alignItems: 'flex-start',
-  },
+  reminderText: { fontSize: 12, color: "#92400E", textAlign: "center" },
+  reminderBold: { fontWeight: "700" },
+  messageWrapper: { maxWidth: "85%", marginBottom: 12 },
+  messageWrapperMe: { alignSelf: "flex-end", alignItems: "flex-end" },
+  messageWrapperOther: { alignSelf: "flex-start", alignItems: "flex-start" },
   authorName: {
     fontSize: 11,
-    color: '#6B7280',
-    fontWeight: '600',
+    color: "#6B7280",
+    fontWeight: "600",
     marginBottom: 4,
     marginLeft: 4,
   },
   bubble: {
+    maxWidth: "80%",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 18,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+    alignSelf: "flex-start",
+    position: "relative",
+    paddingRight: 32,
   },
   bubbleMe: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: "#4F46E5",
     borderTopRightRadius: 4,
+    paddingRight: 32,
   },
   bubbleOther: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: "#F3F4F6",
+    paddingRight: 32,
   },
-  messageContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  messageTextContainer: {
-    flex: 1,
-  },
+  messageTextContainer: { flexShrink: 1 },
   messageText: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#1F2937',
+    color: "#1F2937",
+    flexWrap: "wrap",
   },
-  messageTextMe: {
-    color: '#FFFFFF',
-  },
-  mention: {
-    color: '#818CF8',
-    fontWeight: '700',
-  },
-  starButton: {
-    paddingTop: 2,
-  },
-  messageTime: {
-    fontSize: 10,
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  messageTimeMe: {
-    color: '#C7D2FE',
-  },
-  messageTimeOther: {
-    color: '#9CA3AF',
-  },
-  emptyChat: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyChatText: {
-    color: '#6B7280',
-    fontSize: 14,
-  },
-  // Input Bar
+  messageTextMe: { color: "#FFFFFF" },
+  mention: { color: "#818CF8", fontWeight: "700" },
+  starButtonAbsolute: { position: "absolute", top: 8, right: 8, padding: 4 },
+  messageTime: { fontSize: 10 },
+  messageTimeMe: { color: "#C7D2FE" },
+  messageTimeOther: { color: "#9CA3AF" },
+  emptyChat: { alignItems: "center", paddingVertical: 40 },
+  emptyChatText: { color: "#6B7280", fontSize: 14 },
   inputBar: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    borderTopColor: "#E5E7EB",
+    flexDirection: "row",
+    alignItems: "flex-end",
     gap: 8,
   },
-  attachButton: {
-    padding: 8,
-    marginBottom: 4,
-  },
+  attachButton: { padding: 8, marginBottom: 4 },
   inputWrapper: {
     flex: 1,
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
+    flexDirection: "row",
+    backgroundColor: "#F3F4F6",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'flex-end',
-    overflow: 'hidden',
+    borderColor: "#E5E7EB",
+    alignItems: "flex-end",
+    overflow: "hidden",
   },
   textInput: {
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#1F2937',
+    color: "#1F2937",
     maxHeight: 100,
   },
-  sendButton: {
-    padding: 10,
+  sendButton: { padding: 10 },
+  onlineDot: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#4ADE80",
+    borderWidth: 1,
+    borderColor: "#4F46E5",
+  },
+  onlineOverlay: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-start",
+    alignItems: "flex-end",
+    paddingTop: 100,
+    paddingRight: 16,
+  },
+  onlinePanel: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 16,
+    minWidth: 200,
+    maxWidth: 260,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  onlineTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#4F46E5",
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    paddingBottom: 8,
+  },
+  onlineSectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#059669",
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  offlineSectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  onlineDivider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 10,
+  },
+  onlineEmpty: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    fontStyle: "italic",
+    marginBottom: 4,
+  },
+  onlineMemberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 5,
+  },
+  onlineIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#4ADE80",
+  },
+  offlineIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#D1D5DB",
+  },
+  onlineMemberName: {
+    fontSize: 13,
+    color: "#1F2937",
+    fontWeight: "500",
+    flex: 1,
+  },
+  offlineMemberName: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    flex: 1,
+  },
+  onlineLeaderBadge: {
+    backgroundColor: "#312E81",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  onlineLeaderText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#E0E7FF",
+  },
+  // Date separator
+  dateSeparator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 12,
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  dateSeparatorLine: {
+    flex: 1,
+    height: 1,
+  },
+  dateSeparatorChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  dateSeparatorText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  messageFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+    marginTop: 4,
+  },
+  editedLabel: {
+    fontSize: 9,
+    fontStyle: "italic",
+  },
+  editedLabelMe: { color: "rgba(199,210,254,0.7)" },
+  editedLabelOther: { color: "#9CA3AF" },
+  // Action sheet
+  actionOverlay: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  actionSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+    paddingHorizontal: 16,
+  },
+  actionHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  actionPreview: {
+    fontSize: 13,
+    fontStyle: "italic",
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  actionDivider: { height: 1, marginVertical: 4 },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  actionLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  actionCancel: {
+    fontSize: 15,
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "center",
+  },
+  // Edit modal
+  editOverlay: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  editCard: {
+    width: "100%",
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+  editTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  editInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  editActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  editBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  editBtnCancel: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  editBtnSave: {
+    backgroundColor: "#4F46E5",
+  },
+  editBtnSaveText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

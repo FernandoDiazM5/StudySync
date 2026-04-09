@@ -7,6 +7,7 @@ import GroupsScreen from '../screens/main/GroupsScreen';
 import MessagesListScreen from '../screens/main/MessagesListScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { getMyInvitations } from '../services/firestoreService';
 
 const Tab = createBottomTabNavigator();
@@ -14,6 +15,7 @@ const Tab = createBottomTabNavigator();
 export default function BottomTabNavigator() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const [invitationCount, setInvitationCount] = useState(0);
 
   // Listener global para invitaciones pendientes (badge en tab Grupos)
@@ -34,9 +36,9 @@ export default function BottomTabNavigator() {
         tabBarActiveTintColor: '#4F46E5',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
+          backgroundColor: theme.tabBg,
           borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
+          borderTopColor: theme.tabBorder,
           paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 8,
           height: 60 + insets.bottom,

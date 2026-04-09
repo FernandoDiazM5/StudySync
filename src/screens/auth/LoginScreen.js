@@ -3,7 +3,7 @@
 // Migración de líneas 110-137 del frontend React
 // ============================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
-} from 'react-native';
+  Animated,
+} from "react-native";
 
 const shadow = (color, opacity, radius, offsetY, elevation) =>
   Platform.select({
@@ -28,17 +29,64 @@ const shadow = (color, opacity, radius, offsetY, elevation) =>
       elevation,
     },
   });
-import { BookOpen } from 'lucide-react-native';
-import { signIn } from '../../services/authService';
+import { BookOpen } from "lucide-react-native";
+import { signIn } from "../../services/authService";
+
+const LETTERS = "StudySync".split("");
+
+function WaveText() {
+  const anims = useRef(LETTERS.map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    const animations = LETTERS.map((_, i) =>
+      Animated.sequence([
+        Animated.delay(i * 80),
+        Animated.timing(anims[i], {
+          toValue: -10,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(anims[i], {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    Animated.parallel(animations).start();
+  }, []);
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        justifyContent: "center",
+        marginBottom: 8,
+      }}
+    >
+      {LETTERS.map((letter, i) => (
+        <Animated.Text
+          key={i}
+          style={[styles.title, { transform: [{ translateY: anims[i] }] }]}
+        >
+          {letter}
+        </Animated.Text>
+      ))}
+    </View>
+  );
+}
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleLogin = async () => {
+    setErrorMsg("");
+
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Por favor completa todos los campos.');
+      setErrorMsg("Por favor completa todos los campos.");
       return;
     }
 
@@ -47,15 +95,14 @@ export default function LoginScreen({ navigation }) {
     setLoading(false);
 
     if (!result.success) {
-      Alert.alert('Error', result.error);
+      setErrorMsg(result.error);
     }
-    // Si es exitoso, AuthContext detecta el cambio y navega automáticamente
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#EEF2FF" />
       <View style={styles.card}>
@@ -64,8 +111,17 @@ export default function LoginScreen({ navigation }) {
           <BookOpen color="#FFFFFF" size={32} />
         </View>
 
-        <Text style={styles.title}>StudySync</Text>
-        <Text style={styles.subtitle}>Colaboración académica, sin distracciones.</Text>
+        <WaveText />
+        <Text style={styles.subtitle}>
+          Colaboración académica, sin distracciones.
+        </Text>
+
+        {/* Banner de error */}
+        {errorMsg ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{errorMsg}</Text>
+          </View>
+        ) : null}
 
         {/* Formulario */}
         <View style={styles.form}>
@@ -104,13 +160,13 @@ export default function LoginScreen({ navigation }) {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.buttonText}>INICIAR SESIÓN</Text>
+              <Text style={styles.buttonText}>Iniciar Sesión</Text>
             )}
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity
-          onPress={() => navigation.navigate('Register')}
+          onPress={() => navigation.navigate("Register")}
           style={styles.registerLink}
         >
           <Text style={styles.registerText}>Crear una cuenta nueva</Text>
@@ -123,83 +179,99 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EEF2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#EEF2FF",
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 24,
   },
   card: {
-    width: '100%',
+    width: "100%",
     maxWidth: 400,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 32,
     paddingVertical: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    ...shadow('rgba(0,0,0,0.1)', 0.1, 12, 4, 8),
+    alignItems: "center",
+    ...shadow("rgba(0,0,0,0.1)", 0.1, 12, 4, 8),
   },
   logoContainer: {
     width: 64,
     height: 64,
-    backgroundColor: '#4F46E5',
+    backgroundColor: "#4F46E5",
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 16,
-    ...shadow('rgba(79,70,229,0.3)', 0.3, 8, 4, 6),
+    ...shadow("rgba(79,70,229,0.3)", 0.3, 8, 4, 6),
   },
   title: {
     fontSize: 24,
-    fontWeight: '800',
-    color: '#1F2937',
+    fontWeight: "800",
+    color: "#1F2937",
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: "#6B7280",
     marginBottom: 32,
   },
+  errorBanner: {
+    width: "100%",
+    backgroundColor: "#FEE2E2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    fontSize: 13,
+    color: "#B91C1C",
+    fontWeight: "600",
+    textAlign: "center",
+  },
   form: {
-    width: '100%',
+    width: "100%",
     gap: 16,
   },
   inputGroup: {
-    width: '100%',
+    width: "100%",
   },
   label: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#6B7280',
+    fontWeight: "700",
+    color: "#6B7280",
     letterSpacing: 1,
     marginBottom: 6,
   },
   input: {
-    width: '100%',
+    width: "100%",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     borderRadius: 10,
     fontSize: 14,
-    color: '#1F2937',
+    color: "#1F2937",
   },
   button: {
-    width: '100%',
-    backgroundColor: '#4F46E5',
+    width: "100%",
+    backgroundColor: "#4F46E5",
     paddingVertical: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
-    ...shadow('rgba(79,70,229,0.3)', 0.3, 8, 4, 6),
+    ...shadow("rgba(79,70,229,0.3)", 0.3, 8, 4, 6),
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.5,
   },
   registerLink: {
@@ -208,7 +280,7 @@ const styles = StyleSheet.create({
   },
   registerText: {
     fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '700',
+    color: "#6B7280",
+    fontWeight: "700",
   },
 });

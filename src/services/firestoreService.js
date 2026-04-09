@@ -73,6 +73,49 @@ export const getUsersByIds = async (userIds) => {
 };
 
 /**
+ * Marcar usuario como activo en un chat
+ */
+export const setUserPresence = async (uid, groupId) => {
+  const docRef = doc(db, 'users', uid);
+  await updateDoc(docRef, {
+    activeInChat: groupId,
+    lastActive: new Date().toISOString(),
+  });
+};
+
+/**
+ * Limpiar presencia del usuario al salir del chat
+ */
+export const clearUserPresence = async (uid) => {
+  const docRef = doc(db, 'users', uid);
+  await updateDoc(docRef, {
+    activeInChat: null,
+    lastActive: new Date().toISOString(),
+  });
+};
+
+/**
+ * Escuchar miembros en línea en un chat (activos en los últimos 2 minutos)
+ */
+export const getOnlineMembers = (groupId, memberIds, callback) => {
+  if (!memberIds?.length) {
+    callback([]);
+    return () => {};
+  }
+  const q = query(
+    collection(db, 'users'),
+    where('activeInChat', '==', groupId)
+  );
+  return onSnapshot(q, (snapshot) => {
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const online = snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(u => memberIds.includes(u.id) && u.lastActive >= twoMinutesAgo);
+    callback(online);
+  }, logFirestoreError('getOnlineMembers'));
+};
+
+/**
  * Actualizar perfil de usuario
  */
 export const updateUserProfile = async (uid, data) => {
@@ -114,6 +157,14 @@ export const getMyGroups = (userId, callback) => {
 };
 
 /**
+ * Actualizar datos de un grupo
+ */
+export const updateGroup = async (groupId, data) => {
+  const docRef = doc(db, 'groups', groupId);
+  await updateDoc(docRef, { ...data, updatedAt: new Date().toISOString() });
+};
+
+/**
  * Obtener un grupo por ID
  */
 export const getGroup = async (groupId) => {
@@ -132,7 +183,7 @@ export const createGroup = async (groupData) => {
   const docRef = await addDoc(collection(db, 'groups'), {
     ...groupData,
     createdAt: new Date().toISOString(),
-    status: 'active'
+    status: 'En progreso'
   });
   return docRef.id;
 };
@@ -296,6 +347,14 @@ export const createTask = async (taskData) => {
 };
 
 /**
+ * Editar una tarea
+ */
+export const updateTask = async (taskId, data) => {
+  const docRef = doc(db, 'tasks', taskId);
+  await updateDoc(docRef, { ...data, updatedAt: new Date().toISOString() });
+};
+
+/**
  * Actualizar estado de una tarea
  */
 export const updateTaskStatus = async (taskId, newStatus) => {
@@ -398,6 +457,26 @@ export const toggleMessageImportant = async (messageId, currentValue) => {
   await updateDoc(docRef, {
     important: !currentValue
   });
+};
+
+/**
+ * Editar texto de un mensaje
+ */
+export const editMessage = async (messageId, newText) => {
+  const docRef = doc(db, 'messages', messageId);
+  await updateDoc(docRef, {
+    text: newText.trim(),
+    edited: true,
+    editedAt: new Date().toISOString(),
+  });
+};
+
+/**
+ * Eliminar un mensaje
+ */
+export const deleteMessage = async (messageId) => {
+  const docRef = doc(db, 'messages', messageId);
+  await deleteDoc(docRef);
 };
 
 /**

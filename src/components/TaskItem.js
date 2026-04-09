@@ -5,10 +5,12 @@
 
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { CheckSquare, Clock, Users, AlertCircle } from 'lucide-react-native';
+import { CheckSquare, Clock, Users, AlertCircle, Pencil } from 'lucide-react-native';
 import { isOverdue, formatDate } from '../utils/dateUtils';
+import { useTheme } from '../contexts/ThemeContext';
 
-export default function TaskItem({ task, assigneeName, onToggleStatus }) {
+export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, isLeader }) {
+  const { theme, isDark } = useTheme();
   const isCompleted = task.status === 'Completada';
   const isInProgress = task.status === 'En progreso';
   const overdue = !isCompleted && isOverdue(task.dueDate);
@@ -16,13 +18,13 @@ export default function TaskItem({ task, assigneeName, onToggleStatus }) {
   const getBorderColor = () => {
     if (isCompleted) return '#BBF7D0';
     if (overdue) return '#F87171';
-    return '#E5E7EB';
+    return theme.border;
   };
 
   const getBgColor = () => {
-    if (isCompleted) return '#F0FDF4';
-    if (overdue) return '#FEF2F2';
-    return '#FFFFFF';
+    if (isCompleted) return isDark ? '#052e16' : '#F0FDF4';
+    if (overdue) return isDark ? '#450a0a' : '#FEF2F2';
+    return theme.card;
   };
 
   const getCheckboxStyle = () => {
@@ -48,18 +50,26 @@ export default function TaskItem({ task, assigneeName, onToggleStatus }) {
 
       {/* Content */}
       <View style={styles.content}>
-        <Text style={[
-          styles.title,
-          isCompleted && styles.titleCompleted,
-          overdue && styles.titleOverdue
-        ]}>
-          {task.title}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={[
+            styles.title,
+            { color: theme.text },
+            isCompleted && styles.titleCompleted,
+            overdue && styles.titleOverdue
+          ]}>
+            {task.title}
+          </Text>
+          {isLeader && (
+            <TouchableOpacity onPress={() => onEdit?.(task)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Pencil color="#6B7280" size={14} />
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View style={styles.metaRow}>
-          <View style={styles.assigneeBadge}>
-            <Users color="#6B7280" size={12} />
-            <Text style={styles.assigneeText}>
+          <View style={[styles.assigneeBadge, { backgroundColor: theme.input, borderColor: theme.border }]}>
+            <Users color={theme.textSecondary} size={12} />
+            <Text style={[styles.assigneeText, { color: theme.textSecondary }]}>
               {assigneeName || 'Sin asignar'}
             </Text>
           </View>
@@ -118,11 +128,18 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
   title: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 4,
+    flex: 1,
   },
   titleCompleted: {
     color: '#6B7280',

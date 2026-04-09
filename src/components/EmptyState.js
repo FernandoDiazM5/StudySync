@@ -5,15 +5,17 @@
 
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function EmptyState({ icon: Icon, title, message, actionText, onAction }) {
+  const { theme } = useTheme();
   return (
-    <View style={styles.container}>
-      <View style={styles.iconContainer}>
-        <Icon color="#9CA3AF" size={32} />
+    <View style={[styles.container, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View style={[styles.iconContainer, { backgroundColor: theme.bg }]}>
+        <Icon color={theme.textMuted} size={32} />
       </View>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.message}>{message}</Text>
+      <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+      <Text style={[styles.message, { color: theme.textSecondary }]}>{message}</Text>
       {actionText && (
         <TouchableOpacity
           style={styles.actionButton}

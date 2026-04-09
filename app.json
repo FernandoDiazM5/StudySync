@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "softwareKeyboardLayoutMode": "pan",
       "package": "com.studysync.app",
       "googleServicesFile": "./src/google-services.json",
       "adaptiveIcon": {
@@ -26,6 +27,14 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c32b61d5-be48-46d6-80ff-2f4af0a9e82a"
+      }
     }
   }
 }
