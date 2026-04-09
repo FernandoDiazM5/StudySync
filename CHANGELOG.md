@@ -1,3 +1,72 @@
+# StudySync — Update 3.0
+
+**Autor:** Bryan Huaman Roque
+**Plataforma:** React Native (Expo)
+**Versión:** 3.0.0
+
+---
+
+## Correcciones de bugs
+
+### Chat
+- **Delay en el ícono de enviar** — El ícono cambiaba de color con retraso porque dependía de `setHasInput`, que requiere un ciclo de re-render. Solución: se eliminó el estado `hasInput` y se reemplazó por `Animated.Value` con `setValue()`. Dos íconos superpuestos (gris/morado) con opacidad cruzada actualizan el color directamente en el hilo nativo, sin pasar por React.
+- **Delay al subir el input con el teclado (Android)** — La animación de 120ms sobre `keyboardDidShow` sumaba delay visible al delay natural del evento. Solución: `keyboardAnim.setValue()` en lugar de `Animated.timing`, actualización instantánea.
+
+### Encuestas y Ruleta en el chat
+- **Opciones de ruleta colapsadas** — `alignSelf: "flex-start"` en el wrapper colapsaba el ancho del contenedor, rompiendo el layout flex interno de la lista. Corregido con `alignSelf: "stretch"`.
+- **Texto de opción tapado por la barra de votación** — La barra era de altura completa con `position: absolute`, ocultando el texto. Rediseñada como barra delgada de 3px debajo del texto.
+
+---
+
+## Nuevas funcionalidades
+
+### Autenticación
+- **Ver/ocultar contraseña** — Botón de ojo en todos los campos de contraseña:
+  - Login: campo contraseña.
+  - Registro: campo contraseña y confirmar contraseña. El ojo coexiste con el ícono de coincidencia (check/X).
+  - Perfil → Cambiar contraseña: los tres campos (actual, nueva, confirmar).
+
+### Chat — Menú de acciones (3 puntos verticales)
+- **Reemplaza el ícono de adjuntar** — El botón `MoreVertical` abre un action sheet con dos opciones: Crear encuesta y Ruleta de sorteo.
+
+### Chat — Encuestas
+- **Crear encuesta** — Modal con campo de pregunta y lista dinámica de opciones (mín. 2, máx. 6). Botón "Agregar opción" y eliminación individual.
+- **Publicar encuesta** — Se envía como mensaje especial con tipo `poll`. Visible para todos los miembros en tiempo real.
+- **Votar** — Cualquier miembro puede votar tocando una opción. Solo un voto por persona; el nuevo reemplaza al anterior. Se actualiza en Firestore con `votePoll`.
+- **Visualización** — Barra de progreso delgada debajo de cada opción, porcentaje a la derecha, contador total de votos al pie.
+
+### Chat — Ruleta de sorteo
+- **Crear ruleta** — Modal con:
+  - Campo de título del sorteo (ej. "¿Quién expone?").
+  - Chips de miembros del grupo para agregar/quitar con un toque (toggle: rellena espacios vacíos primero).
+  - Lista manual de elementos (mín. 2, máx. 10) con botón "Agregar elemento".
+  - El modal se resetea limpio cada vez que se abre.
+- **Animación de giro** — 26 ciclos con desaceleración exponencial (~3s) que termina en el ganador.
+- **Banner de resultado** — Al terminar el giro, aparece un banner con el nombre del ganador dentro del modal.
+- **Enviar al chat** — Publica un mensaje especial con tipo `roulette` que muestra:
+  - Encabezado con emoji 🎡, título del sorteo y nombre de quien lo lanzó.
+  - Lista numerada de todos los participantes; el ganador resaltado en morado con 👑.
+  - Caja destacada "¡Le tocó!" con el nombre del ganador en grande.
+- **Volver a girar** — Permite repetir el sorteo sin cerrar el modal.
+
+---
+
+## Archivos modificados
+
+| Archivo | Cambios principales |
+|---|---|
+| `src/screens/auth/LoginScreen.js` | Toggle ver/ocultar contraseña |
+| `src/screens/auth/RegisterScreen.js` | Toggle ver/ocultar en contraseña y confirmar contraseña (layout flex con ojo + check/X) |
+| `src/screens/main/ProfileScreen.js` | Toggle ver/ocultar en los 3 campos de cambio de contraseña |
+| `src/screens/group/ChatScreen.js` | Ícono 3 puntos verticales, encuestas, ruleta, fix delay ícono enviar, fix delay teclado |
+| `src/services/firestoreService.js` | Añadido: `votePoll` |
+
+---
+
+*StudySync — Colaboración académica, sin distracciones.*
+
+---
+
 # StudySync — Update 2.0
 
 **Autor:** Bryan Huaman Roque  

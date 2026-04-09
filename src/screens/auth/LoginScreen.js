@@ -29,7 +29,7 @@ const shadow = (color, opacity, radius, offsetY, elevation) =>
       elevation,
     },
   });
-import { BookOpen } from "lucide-react-native";
+import { BookOpen, Eye, EyeOff } from "lucide-react-native";
 import { signIn } from "../../services/authService";
 
 const LETTERS = "StudySync".split("");
@@ -79,6 +79,7 @@ function WaveText() {
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -141,14 +142,25 @@ export default function LoginScreen({ navigation }) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>CONTRASEÑA</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.pwdRow}>
+              <TextInput
+                style={[styles.input, styles.pwdInput]}
+                placeholder="••••••••"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry={!showPwd}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPwd((v) => !v)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {showPwd
+                  ? <EyeOff color="#9CA3AF" size={18} />
+                  : <Eye color="#9CA3AF" size={18} />}
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -255,6 +267,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     fontSize: 14,
     color: "#1F2937",
+  },
+  pwdRow: {
+    position: "relative",
+  },
+  pwdInput: {
+    paddingRight: 48,
+  },
+  eyeBtn: {
+    position: "absolute",
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
   },
   button: {
     width: "100%",

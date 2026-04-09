@@ -17,7 +17,7 @@ import {
   ScrollView,
   StatusBar,
 } from 'react-native';
-import { Users, ChevronLeft, CheckCircle, XCircle } from 'lucide-react-native';
+import { Users, ChevronLeft, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react-native';
 import { registerUser } from '../../services/authService';
 
 const shadow = (color, opacity, radius, offsetY, elevation) =>
@@ -41,6 +41,8 @@ export default function RegisterScreen({ navigation }) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [touched, setTouched] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -173,47 +175,58 @@ export default function RegisterScreen({ navigation }) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>CONTRASEÑA</Text>
-              <TextInput
-                style={[styles.input, touched.password && errors.password && styles.inputError]}
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                onBlur={() => touch('password')}
-              />
+              <View style={styles.pwdRow}>
+                <TextInput
+                  style={[styles.input, styles.pwdInput, touched.password && errors.password && styles.inputError]}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showPwd}
+                  value={password}
+                  onChangeText={setPassword}
+                  onBlur={() => touch('password')}
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowPwd((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {showPwd ? <EyeOff color="#9CA3AF" size={18} /> : <Eye color="#9CA3AF" size={18} />}
+                </TouchableOpacity>
+              </View>
               {touched.password && errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>REPETIR CONTRASEÑA</Text>
-              <View style={styles.confirmRow}>
+              <View style={[
+                styles.confirmRow,
+                confirmPassword.length > 0 && (
+                  password === confirmPassword ? styles.inputMatch : styles.inputNoMatch
+                ),
+                touched.confirmPassword && errors.confirmPassword && !confirmPassword.length && styles.inputError,
+              ]}>
                 <TextInput
-                  style={[
-                    styles.input,
-                    styles.confirmInput,
-                    confirmPassword.length > 0 && (
-                      password === confirmPassword
-                        ? styles.inputMatch
-                        : styles.inputNoMatch
-                    ),
-                    touched.confirmPassword && errors.confirmPassword && !confirmPassword.length && styles.inputError,
-                  ]}
+                  style={styles.confirmInput}
                   placeholder="••••••••"
                   placeholderTextColor="#9CA3AF"
-                  secureTextEntry
+                  secureTextEntry={!showConfirmPwd}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   onBlur={() => touch('confirmPassword')}
                 />
-                {confirmPassword.length > 0 && (
-                  <View style={styles.matchIcon}>
-                    {password === confirmPassword
+                <View style={styles.confirmIcons}>
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPwd((v) => !v)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    {showConfirmPwd ? <EyeOff color="#9CA3AF" size={18} /> : <Eye color="#9CA3AF" size={18} />}
+                  </TouchableOpacity>
+                  {confirmPassword.length > 0 && (
+                    password === confirmPassword
                       ? <CheckCircle color="#10B981" size={22} />
                       : <XCircle color="#EF4444" size={22} />
-                    }
-                  </View>
-                )}
+                  )}
+                </View>
               </View>
               {touched.confirmPassword && errors.confirmPassword && (
                 <Text style={styles.errorText}>{errors.confirmPassword}</Text>
@@ -323,11 +336,39 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 4,
   },
-  confirmRow: {
+  pwdRow: {
     position: 'relative',
   },
-  confirmInput: {
+  pwdInput: {
     paddingRight: 48,
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+  },
+  confirmInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  confirmIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 12,
   },
   inputMatch: {
     borderColor: '#10B981',
@@ -336,13 +377,6 @@ const styles = StyleSheet.create({
   inputNoMatch: {
     borderColor: '#EF4444',
     backgroundColor: '#FFF5F5',
-  },
-  matchIcon: {
-    position: 'absolute',
-    right: 14,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
   },
   button: {
     width: '100%',

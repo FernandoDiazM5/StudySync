@@ -5,11 +5,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
+  Animated,
   View,
   Text,
   TextInput,
   TouchableOpacity,
   FlatList,
+  ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -20,7 +22,7 @@ import {
   Vibration,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, Send, Star, UsersRound, Paperclip, Pencil, Trash2 } from "lucide-react-native";
+import { ChevronLeft, Send, Star, UsersRound, MoreVertical, Pencil, Trash2, BarChart2, Shuffle, Plus, X } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import * as firestoreService from "../../services/firestoreService";
@@ -37,11 +39,26 @@ export default function ChatScreen({ route, navigation }) {
   const [members, setMembers] = useState([]);
   const [onlineMembers, setOnlineMembers] = useState([]);
   const [showOnline, setShowOnline] = useState(false);
-  const [hasInput, setHasInput] = useState(false);
-  const [actionMsg, setActionMsg] = useState(null);   // mensaje seleccionado con long press
-  const [editingMsg, setEditingMsg] = useState(null); // mensaje en modo edición
+  const keyboardAnim = useRef(new Animated.Value(0)).current;
+  const sendAnim = useRef(new Animated.Value(0)).current;
+  const [actionMsg, setActionMsg] = useState(null);
+  const [editingMsg, setEditingMsg] = useState(null);
   const [editText, setEditText] = useState("");
   const [editLoading, setEditLoading] = useState(false);
+  // Extra menu
+  const [showExtraMenu, setShowExtraMenu] = useState(false);
+  // Poll
+  const [showPollModal, setShowPollModal] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState(["", ""]);
+  // Roulette
+  const [showRouletteModal, setShowRouletteModal] = useState(false);
+  const [rouletteTitle, setRouletteTitle] = useState("");
+  const [rouletteItems, setRouletteItems] = useState(["", ""]);
+  const [rouletteSpinning, setRouletteSpinning] = useState(false);
+  const [rouletteResult, setRouletteResult] = useState(null);
+  const [rouletteCurrent, setRouletteCurrent] = useState("");
+  const rouletteTimerRef = useRef(null);
   const inputValueRef = useRef("");
   const textInputRef = useRef(null);
   const flatListRef = useRef(null);
@@ -111,8 +128,21 @@ export default function ChatScreen({ route, navigation }) {
       unsubMessages();
       unsubOnline();
       clearPresence?.();
+      if (rouletteTimerRef.current) clearTimeout(rouletteTimerRef.current);
     };
   }, [groupId, user]);
+
+  // Android: mover input cuando el teclado aparece/desaparece
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      keyboardAnim.setValue(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      keyboardAnim.setValue(0);
+    });
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const handleSend = async () => {
     const textToSend = inputValueRef.current.trim();
@@ -120,7 +150,7 @@ export default function ChatScreen({ route, navigation }) {
 
     textInputRef.current?.clear();
     inputValueRef.current = "";
-    setHasInput(false);
+    sendAnim.setValue(0);
 
     try {
       await firestoreService.sendMessage({
@@ -193,6 +223,94 @@ export default function ChatScreen({ route, navigation }) {
     );
   };
 
+  // ── Poll ─────────────────────────────────────────────────────
+  const handleSendPoll = async () => {
+    const validOptions = pollOptions.filter((o) => o.trim());
+    if (!pollQuestion.trim() || validOptions.length < 2) return;
+    const votes = {};
+    validOptions.forEach((_, i) => { votes[String(i)] = []; });
+    await firestoreService.sendMessage({
+      groupId,
+      authorId: user.uid,
+      type: "poll",
+      question: pollQuestion.trim(),
+      options: validOptions.map((o) => o.trim()),
+      votes,
+      text: `📊 Encuesta: ${pollQuestion.trim()}`,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      important: false,
+    });
+    setPollQuestion("");
+    setPollOptions(["", ""]);
+    setShowPollModal(false);
+  };
+
+  const handleVotePoll = async (messageId, optionIndex) => {
+    await firestoreService.votePoll(messageId, optionIndex, user.uid);
+  };
+
+  // ── Roulette ─────────────────────────────────────────────────
+  const handleSpin = () => {
+    const items = rouletteItems.filter((i) => i.trim());
+    if (items.length < 2) return;
+    setRouletteSpinning(true);
+    setRouletteResult(null);
+    const winner = items[Math.floor(Math.random() * items.length)];
+    let tick = 0;
+    const totalTicks = 26;
+    const next = () => {
+      tick++;
+      if (tick < totalTicks) {
+        setRouletteCurrent(items[Math.floor(Math.random() * items.length)]);
+        const delay = 50 + Math.pow(tick / totalTicks, 2) * 500;
+        rouletteTimerRef.current = setTimeout(next, delay);
+      } else {
+        setRouletteCurrent(winner);
+        setRouletteResult(winner);
+        setRouletteSpinning(false);
+      }
+    };
+    rouletteTimerRef.current = setTimeout(next, 50);
+  };
+
+  const toggleMemberInRoulette = (memberName) => {
+    const already = rouletteItems.findIndex((i) => i === memberName);
+    if (already >= 0) {
+      const updated = rouletteItems.filter((i) => i !== memberName);
+      setRouletteItems(updated.length >= 2 ? updated : [...updated, ...Array(2 - updated.length).fill("")]);
+    } else {
+      const emptyIdx = rouletteItems.findIndex((i) => !i.trim());
+      if (emptyIdx >= 0) {
+        const arr = [...rouletteItems];
+        arr[emptyIdx] = memberName;
+        setRouletteItems(arr);
+      } else {
+        setRouletteItems([...rouletteItems, memberName]);
+      }
+    }
+  };
+
+  const handleSendRouletteResult = async () => {
+    if (!rouletteResult) return;
+    const validItems = rouletteItems.filter((i) => i.trim());
+    await firestoreService.sendMessage({
+      groupId,
+      authorId: user.uid,
+      type: "roulette",
+      rouletteTitle: rouletteTitle.trim() || null,
+      rouletteWinner: rouletteResult,
+      rouletteItems: validItems,
+      text: `🎡 Sorteo: ${rouletteResult}`,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      important: false,
+    });
+    setShowRouletteModal(false);
+    setRouletteResult(null);
+    setRouletteCurrent("");
+    setRouletteItems(["", ""]);
+    setRouletteTitle("");
+  };
+
   const getMemberName = (authorId) => {
     const member = members.find((m) => m.id === authorId);
     return member?.name || "Usuario";
@@ -234,6 +352,111 @@ export default function ChatScreen({ route, navigation }) {
     return result;
   };
 
+  const renderPollMessage = (msg) => {
+    const totalVotes = Object.values(msg.votes || {}).reduce((s, arr) => s + arr.length, 0);
+    const myVote = Object.keys(msg.votes || {}).find((k) =>
+      (msg.votes[k] || []).includes(user.uid)
+    );
+    return (
+      <View style={styles.specialMsgWrapper}>
+        <View style={[styles.pollBubble, { backgroundColor: theme.card, borderColor: "#6366F1" }]}>
+          <View style={styles.pollHeader}>
+            <BarChart2 color="#6366F1" size={14} />
+            <Text style={[styles.pollLabel, { color: "#6366F1" }]}>ENCUESTA</Text>
+          </View>
+          <Text style={[styles.pollQuestion, { color: theme.text }]}>{msg.question}</Text>
+          {(msg.options || []).map((opt, i) => {
+            const count = (msg.votes?.[String(i)] || []).length;
+            const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+            const voted = myVote === String(i);
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[styles.pollOption, { borderColor: voted ? "#6366F1" : theme.border, backgroundColor: theme.input }]}
+                onPress={() => handleVotePoll(msg.id, i)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.pollOptionTop}>
+                  <Text style={[styles.pollOptionText, { color: voted ? "#6366F1" : theme.text }]} numberOfLines={1}>{opt}</Text>
+                  <Text style={[styles.pollPct, { color: voted ? "#6366F1" : theme.textMuted }]}>{pct}%</Text>
+                </View>
+                <View style={[styles.pollBarTrack, { backgroundColor: isDark ? "#374151" : "#E5E7EB" }]}>
+                  <View style={[styles.pollBarFill, { width: `${pct}%`, backgroundColor: voted ? "#6366F1" : "#A5B4FC" }]} />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+          <Text style={[styles.pollTotal, { color: theme.textMuted }]}>{totalVotes} {totalVotes === 1 ? "voto" : "votos"}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderRouletteMessage = (msg) => (
+    <View style={styles.rouletteMsgWrapper}>
+      <View style={[styles.rouletteBubble, { backgroundColor: isDark ? "#1E1B4B" : "#EEF2FF", borderColor: "#6366F1" }]}>
+        {/* Header */}
+        <View style={styles.rouletteHeaderRow}>
+          <Text style={styles.rouletteEmoji}>🎡</Text>
+          <View style={{ flex: 1 }}>
+            {msg.rouletteTitle ? (
+              <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>{msg.rouletteTitle}</Text>
+            ) : (
+              <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>Ruleta de sorteo</Text>
+            )}
+            <Text style={[styles.rouletteMsgSub, { color: theme.textSecondary }]}>
+              Lanzado por {getMemberName(msg.authorId)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Lista de participantes */}
+        {(msg.rouletteItems || []).length > 0 && (
+          <View style={[styles.rouletteList, { borderColor: isDark ? "#312E81" : "#C7D2FE" }]}>
+            {(msg.rouletteItems || []).map((item, i) => {
+              const isWinner = item === msg.rouletteWinner;
+              return (
+                <View
+                  key={i}
+                  style={[
+                    styles.rouletteListItem,
+                    isWinner && { backgroundColor: isDark ? "#312E81" : "#E0E7FF" },
+                  ]}
+                >
+                  <Text style={[styles.rouletteListNum, { color: isWinner ? "#4F46E5" : theme.textMuted }]}>
+                    {i + 1}.
+                  </Text>
+                  <Text
+                    style={[
+                      styles.rouletteListText,
+                      { color: isWinner ? "#4F46E5" : theme.text },
+                      isWinner && { fontWeight: "700" },
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {isWinner && <Text style={styles.rouletteCrown}>👑</Text>}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Ganador destacado */}
+        <View style={[styles.rouletteWinnerBox, { backgroundColor: isDark ? "#312E81" : "#DDD6FE" }]}>
+          <Text style={[styles.rouletteWinnerLabel, { color: isDark ? "#A5B4FC" : "#4338CA" }]}>¡Le tocó!</Text>
+          <Text style={[styles.rouletteWinner, { color: isDark ? "#E0E7FF" : "#3730A3" }]}>
+            {msg.rouletteWinner}
+          </Text>
+        </View>
+
+        <Text style={[styles.rouletteMsgTime, { color: theme.textMuted }]}>
+          {msg.time || formatTime(msg.createdAt)}
+        </Text>
+      </View>
+    </View>
+  );
+
   const renderItem = ({ item }) => {
     if (item.type === "separator") {
       return (
@@ -246,6 +469,8 @@ export default function ChatScreen({ route, navigation }) {
         </View>
       );
     }
+    if (item.type === "poll") return renderPollMessage(item);
+    if (item.type === "roulette") return renderRouletteMessage(item);
     return renderMessage({ item });
   };
 
@@ -393,16 +618,21 @@ export default function ChatScreen({ route, navigation }) {
       {/* Input pegado al teclado */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.bottom}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.bottom : 0}
       >
-        <View
+        <Animated.View
           style={[
             styles.inputBar,
-            { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: theme.card, borderTopColor: theme.border },
+            {
+              paddingBottom: Math.max(insets.bottom, 12),
+              marginBottom: Platform.OS === "android" ? keyboardAnim : 0,
+              backgroundColor: theme.card,
+              borderTopColor: theme.border,
+            },
           ]}
         >
-          <TouchableOpacity style={styles.attachButton}>
-            <Paperclip color={theme.textMuted} size={20} />
+          <TouchableOpacity style={styles.attachButton} onPress={() => setShowExtraMenu(true)}>
+            <MoreVertical color={theme.textMuted} size={22} />
           </TouchableOpacity>
           <View style={[styles.inputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
             <TextInput
@@ -410,7 +640,7 @@ export default function ChatScreen({ route, navigation }) {
               style={[styles.textInput, { color: theme.text }]}
               onChangeText={(text) => {
                 inputValueRef.current = text;
-                setHasInput(text.trim().length > 0);
+                sendAnim.setValue(text.trim().length > 0 ? 1 : 0);
               }}
               placeholder="Escribe un mensaje..."
               placeholderTextColor={theme.textMuted}
@@ -422,15 +652,18 @@ export default function ChatScreen({ route, navigation }) {
               underlineColorAndroid="transparent"
               autoCorrect={false}
             />
-            <TouchableOpacity
-              onPress={handleSend}
-              style={styles.sendButton}
-              disabled={!hasInput}
-            >
-              <Send color={hasInput ? "#4F46E5" : "#9CA3AF"} size={20} />
+            <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
+              <View style={styles.sendIconContainer}>
+                <Animated.View style={[{ position: "absolute" }, { opacity: sendAnim }]}>
+                  <Send color="#4F46E5" size={20} />
+                </Animated.View>
+                <Animated.View style={{ opacity: sendAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
+                  <Send color="#9CA3AF" size={20} />
+                </Animated.View>
+              </View>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
 
       {/* Action sheet: editar / eliminar mensaje propio */}
@@ -577,6 +810,207 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Menú extra (3 puntos) */}
+      <Modal visible={showExtraMenu} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowExtraMenu(false)}>
+        <TouchableOpacity style={styles.actionOverlay} activeOpacity={1} onPress={() => setShowExtraMenu(false)}>
+          <View style={[styles.actionSheet, { backgroundColor: theme.card }]}>
+            <View style={[styles.actionHandle, { backgroundColor: theme.border }]} />
+            <TouchableOpacity style={styles.actionRow} onPress={() => { setShowExtraMenu(false); setShowPollModal(true); }}>
+              <BarChart2 color="#6366F1" size={22} />
+              <Text style={[styles.actionLabel, { color: theme.text }]}>Crear encuesta</Text>
+            </TouchableOpacity>
+            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
+            <TouchableOpacity style={styles.actionRow} onPress={() => { setShowExtraMenu(false); setRouletteTitle(""); setRouletteItems(["", ""]); setRouletteResult(null); setRouletteCurrent(""); setShowRouletteModal(true); }}>
+              <Shuffle color="#6366F1" size={22} />
+              <Text style={[styles.actionLabel, { color: theme.text }]}>Ruleta de sorteo</Text>
+            </TouchableOpacity>
+            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
+            <TouchableOpacity style={styles.actionRow} onPress={() => setShowExtraMenu(false)}>
+              <Text style={[styles.actionCancel, { color: theme.textSecondary }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal encuesta */}
+      <Modal visible={showPollModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowPollModal(false)}>
+        <View style={styles.editOverlay}>
+          <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "80%" }]}>
+            <View style={styles.modalTitleRow}>
+              <BarChart2 color="#6366F1" size={18} />
+              <Text style={[styles.editTitle, { color: theme.text }]}>Nueva encuesta</Text>
+              <TouchableOpacity onPress={() => setShowPollModal(false)}>
+                <X color={theme.textMuted} size={20} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+              placeholder="¿Cuál es la pregunta?"
+              placeholderTextColor={theme.textMuted}
+              value={pollQuestion}
+              onChangeText={setPollQuestion}
+              maxLength={120}
+            />
+            {pollOptions.map((opt, i) => (
+              <View key={i} style={styles.pollOptionRow}>
+                <TextInput
+                  style={[styles.pollOptionInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                  placeholder={`Opción ${i + 1}`}
+                  placeholderTextColor={theme.textMuted}
+                  value={opt}
+                  onChangeText={(t) => { const arr = [...pollOptions]; arr[i] = t; setPollOptions(arr); }}
+                  maxLength={80}
+                />
+                {pollOptions.length > 2 && (
+                  <TouchableOpacity onPress={() => setPollOptions(pollOptions.filter((_, j) => j !== i))} style={styles.pollRemoveBtn}>
+                    <X color="#EF4444" size={16} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+            {pollOptions.length < 6 && (
+              <TouchableOpacity style={[styles.addOptionBtn, { borderColor: theme.border }]} onPress={() => setPollOptions([...pollOptions, ""])}>
+                <Plus color="#6366F1" size={16} />
+                <Text style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}>Agregar opción</Text>
+              </TouchableOpacity>
+            )}
+            <View style={styles.editActions}>
+              <TouchableOpacity style={[styles.editBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]} onPress={() => setShowPollModal(false)}>
+                <Text style={[styles.editBtnCancel, { color: theme.text }]}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editBtn, styles.editBtnSave, (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) && { opacity: 0.5 }]}
+                onPress={handleSendPoll}
+                disabled={!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2}
+              >
+                <Text style={styles.editBtnSaveText}>Publicar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal ruleta */}
+      <Modal visible={showRouletteModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => { if (!rouletteSpinning) setShowRouletteModal(false); }}>
+        <View style={styles.editOverlay}>
+          <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "90%" }]}>
+            {/* Header */}
+            <View style={styles.modalTitleRow}>
+              <Shuffle color="#6366F1" size={18} />
+              <Text style={[styles.editTitle, { color: theme.text }]}>Ruleta de sorteo</Text>
+              <TouchableOpacity onPress={() => { if (!rouletteSpinning) setShowRouletteModal(false); }}>
+                <X color={theme.textMuted} size={20} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 14, paddingBottom: 4 }}>
+              {/* Título del sorteo */}
+              <TextInput
+                style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                placeholder="Título del sorteo (ej. ¿Quién expone?)"
+                placeholderTextColor={theme.textMuted}
+                value={rouletteTitle}
+                onChangeText={setRouletteTitle}
+                maxLength={80}
+                editable={!rouletteSpinning}
+              />
+
+              {/* Chips de miembros */}
+              {members.length > 0 && (
+                <View style={styles.memberChipsSection}>
+                  <Text style={[styles.memberChipsLabel, { color: theme.textSecondary }]}>Agregar miembros:</Text>
+                  <View style={styles.memberChipsRow}>
+                    {members.map((m) => {
+                      const selected = rouletteItems.includes(m.name);
+                      return (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={[
+                            styles.memberChip,
+                            {
+                              backgroundColor: selected ? "#6366F1" : (isDark ? "#374151" : "#F3F4F6"),
+                              borderColor: selected ? "#6366F1" : theme.border,
+                            },
+                          ]}
+                          onPress={() => !rouletteSpinning && toggleMemberInRoulette(m.name)}
+                          disabled={rouletteSpinning}
+                        >
+                          <View style={[styles.memberChipAvatar, { backgroundColor: selected ? "#4338CA" : (isDark ? "#4B5563" : "#E5E7EB") }]}>
+                            <Text style={[styles.memberChipInitial, { color: selected ? "#E0E7FF" : theme.textMuted }]}>
+                              {m.name?.[0]?.toUpperCase() || "?"}
+                            </Text>
+                          </View>
+                          <Text style={[styles.memberChipName, { color: selected ? "#FFFFFF" : theme.text }]} numberOfLines={1}>
+                            {m.name?.split(" ")[0]}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Lista manual de elementos */}
+              <View style={styles.rouletteItemsSection}>
+                <Text style={[styles.memberChipsLabel, { color: theme.textSecondary }]}>Opciones del sorteo:</Text>
+                {rouletteItems.map((item, i) => (
+                  <View key={i} style={styles.pollOptionRow}>
+                    <TextInput
+                      style={[styles.pollOptionInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                      placeholder={`Elemento ${i + 1}`}
+                      placeholderTextColor={theme.textMuted}
+                      value={item}
+                      onChangeText={(t) => { const arr = [...rouletteItems]; arr[i] = t; setRouletteItems(arr); }}
+                      maxLength={60}
+                      editable={!rouletteSpinning}
+                    />
+                    {rouletteItems.length > 2 && (
+                      <TouchableOpacity onPress={() => setRouletteItems(rouletteItems.filter((_, j) => j !== i))} style={styles.pollRemoveBtn} disabled={rouletteSpinning}>
+                        <X color="#EF4444" size={16} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+                {rouletteItems.length < 10 && (
+                  <TouchableOpacity style={[styles.addOptionBtn, { borderColor: theme.border }]} onPress={() => setRouletteItems([...rouletteItems, ""])} disabled={rouletteSpinning}>
+                    <Plus color="#6366F1" size={16} />
+                    <Text style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}>Agregar elemento</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </ScrollView>
+
+            {rouletteResult && (
+              <View style={[styles.rouletteWinnerBanner, { backgroundColor: isDark ? "#312E81" : "#EDE9FE" }]}>
+                <Text style={[styles.rouletteWinnerBannerLabel, { color: isDark ? "#A5B4FC" : "#6D28D9" }]}>🏆 Ganador</Text>
+                <Text style={[styles.rouletteWinnerBannerName, { color: isDark ? "#E0E7FF" : "#4C1D95" }]} numberOfLines={1}>{rouletteResult}</Text>
+              </View>
+            )}
+
+            <View style={[styles.editActions, { marginTop: 8 }]}>
+              {rouletteResult ? (
+                <>
+                  <TouchableOpacity style={[styles.editBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]} onPress={() => { setRouletteResult(null); setRouletteCurrent(""); }}>
+                    <Text style={[styles.editBtnCancel, { color: theme.text }]}>Volver a girar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.editBtn, styles.editBtnSave]} onPress={handleSendRouletteResult}>
+                    <Text style={styles.editBtnSaveText}>Enviar al chat</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.editBtn, styles.editBtnSave, { flex: 1 }, (rouletteSpinning || rouletteItems.filter(i => i.trim()).length < 2) && { opacity: 0.5 }]}
+                  onPress={handleSpin}
+                  disabled={rouletteSpinning || rouletteItems.filter(i => i.trim()).length < 2}
+                >
+                  <Text style={styles.editBtnSaveText}>{rouletteSpinning ? "Girando..." : "🎡 Girar"}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -701,6 +1135,7 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   sendButton: { padding: 10 },
+  sendIconContainer: { width: 20, height: 20 },
   onlineDot: {
     position: "absolute",
     top: -2,
@@ -938,5 +1373,238 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 14,
     fontWeight: "700",
+  },
+  specialMsgWrapper: {
+    alignSelf: "stretch",
+    marginBottom: 12,
+  },
+  rouletteMsgWrapper: {
+    alignSelf: "stretch",
+    marginBottom: 12,
+  },
+  // Poll message
+  pollBubble: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 14,
+    gap: 8,
+  },
+  pollHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  pollLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  pollQuestion: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  pollOption: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingTop: 9,
+    paddingBottom: 8,
+    gap: 6,
+  },
+  pollOptionTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pollBarTrack: {
+    height: 3,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  pollBarFill: {
+    height: 3,
+    borderRadius: 2,
+  },
+  pollOptionText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  pollPct: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+  pollTotal: {
+    fontSize: 11,
+    textAlign: "right",
+    marginTop: 2,
+  },
+  // Roulette message
+  rouletteBubble: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+  },
+  rouletteHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  rouletteEmoji: {
+    fontSize: 26,
+  },
+  rouletteMsgTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  rouletteMsgSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  rouletteList: {
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  rouletteListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  rouletteListNum: {
+    fontSize: 12,
+    fontWeight: "600",
+    width: 18,
+  },
+  rouletteListText: {
+    flex: 1,
+    fontSize: 13,
+  },
+  rouletteCrown: {
+    fontSize: 14,
+  },
+  rouletteWinnerBox: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    gap: 2,
+  },
+  rouletteWinnerLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  rouletteWinner: {
+    fontSize: 17,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  rouletteMsgTime: {
+    fontSize: 10,
+    textAlign: "right",
+  },
+  // Modal shared
+  modalTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  // Poll/Roulette creation
+  pollOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  pollOptionInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  pollRemoveBtn: {
+    padding: 6,
+  },
+  addOptionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: "center",
+  },
+  rouletteWinnerBanner: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "stretch",
+    gap: 10,
+    marginTop: 8,
+  },
+  rouletteWinnerBannerLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  rouletteWinnerBannerName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  memberChipsSection: {
+    gap: 8,
+  },
+  memberChipsLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  memberChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  memberChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  memberChipAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  memberChipInitial: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  memberChipName: {
+    fontSize: 13,
+    fontWeight: "600",
+    maxWidth: 80,
+  },
+  rouletteItemsSection: {
+    gap: 8,
+    marginBottom: 4,
   },
 });

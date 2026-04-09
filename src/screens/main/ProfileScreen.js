@@ -23,6 +23,8 @@ import {
   Phone,
   Moon,
   Sun,
+  Eye,
+  EyeOff,
 } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -39,6 +41,9 @@ export default function ProfileScreen() {
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   // Sincronizar estado local cuando cambia userProfile
@@ -177,36 +182,51 @@ export default function ProfileScreen() {
             </Text>
             <View>
               <Text style={[s.label, { color: theme.textSecondary }]}>CONTRASEÑA ACTUAL</Text>
-              <TextInput
-                style={[s.input, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                secureTextEntry
-                value={currentPwd}
-                onChangeText={setCurrentPwd}
-                placeholder="••••••••"
-                placeholderTextColor={theme.textMuted}
-              />
+              <View style={s.pwdRow}>
+                <TextInput
+                  style={[s.input, s.pwdInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                  secureTextEntry={!showCurrentPwd}
+                  value={currentPwd}
+                  onChangeText={setCurrentPwd}
+                  placeholder="••••••••"
+                  placeholderTextColor={theme.textMuted}
+                />
+                <TouchableOpacity style={s.eyeBtn} onPress={() => setShowCurrentPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  {showCurrentPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
+                </TouchableOpacity>
+              </View>
             </View>
             <View>
               <Text style={[s.label, { color: theme.textSecondary }]}>NUEVA CONTRASEÑA</Text>
-              <TextInput
-                style={[s.input, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                secureTextEntry
-                value={newPwd}
-                onChangeText={setNewPwd}
-                placeholder="••••••••"
-                placeholderTextColor={theme.textMuted}
-              />
+              <View style={s.pwdRow}>
+                <TextInput
+                  style={[s.input, s.pwdInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                  secureTextEntry={!showNewPwd}
+                  value={newPwd}
+                  onChangeText={setNewPwd}
+                  placeholder="••••••••"
+                  placeholderTextColor={theme.textMuted}
+                />
+                <TouchableOpacity style={s.eyeBtn} onPress={() => setShowNewPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  {showNewPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
+                </TouchableOpacity>
+              </View>
             </View>
             <View>
               <Text style={[s.label, { color: theme.textSecondary }]}>CONFIRMAR NUEVA CONTRASEÑA</Text>
-              <TextInput
-                style={[s.input, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                secureTextEntry
-                value={confirmPwd}
-                onChangeText={setConfirmPwd}
-                placeholder="••••••••"
-                placeholderTextColor={theme.textMuted}
-              />
+              <View style={s.pwdRow}>
+                <TextInput
+                  style={[s.input, s.pwdInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                  secureTextEntry={!showConfirmPwd}
+                  value={confirmPwd}
+                  onChangeText={setConfirmPwd}
+                  placeholder="••••••••"
+                  placeholderTextColor={theme.textMuted}
+                />
+                <TouchableOpacity style={s.eyeBtn} onPress={() => setShowConfirmPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  {showConfirmPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
+                </TouchableOpacity>
+              </View>
             </View>
             <TouchableOpacity style={s.saveBtn} onPress={handlePasswordSubmit}>
               <Lock color="#FFF" size={16} />
@@ -385,6 +405,19 @@ const s = StyleSheet.create({
     borderRadius: 10,
     fontSize: 14,
     color: "#1F2937",
+  },
+  pwdRow: {
+    position: "relative",
+  },
+  pwdInput: {
+    paddingRight: 48,
+  },
+  eyeBtn: {
+    position: "absolute",
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
   },
   inputDisabled: { backgroundColor: "#F3F4F6", color: "#9CA3AF" },
   hint: { fontSize: 10, color: "#9CA3AF", marginTop: 4 },

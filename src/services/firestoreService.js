@@ -472,6 +472,23 @@ export const editMessage = async (messageId, newText) => {
 };
 
 /**
+ * Votar en una encuesta (reemplaza voto anterior del usuario)
+ */
+export const votePoll = async (messageId, optionIndex, userId) => {
+  const docRef = doc(db, 'messages', messageId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return;
+  const currentVotes = snap.data().votes || {};
+  const newVotes = {};
+  for (const key of Object.keys(currentVotes)) {
+    newVotes[key] = (currentVotes[key] || []).filter((id) => id !== userId);
+  }
+  const k = String(optionIndex);
+  newVotes[k] = [...(newVotes[k] || []), userId];
+  await updateDoc(docRef, { votes: newVotes });
+};
+
+/**
  * Eliminar un mensaje
  */
 export const deleteMessage = async (messageId) => {
