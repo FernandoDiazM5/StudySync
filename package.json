@@ -19,6 +19,7 @@
     "expo": "~54.0.33",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.21",
+    "expo-speech": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "firebase": "^12.11.0",
     "lucide-react-native": "^1.7.0",

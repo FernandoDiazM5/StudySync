@@ -8,20 +8,25 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
+import { AccessibilityProvider } from './src/contexts/AccessibilityContext';
+import AccessibilityMenu from './src/components/AccessibilityMenu';
 import AppNavigator from './src/navigation/AppNavigator';
 import { StatusBar } from 'react-native';
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <NavigationContainer>
-            <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
-            <AppNavigator />
-          </NavigationContainer>
-        </AuthProvider>
-      </ThemeProvider>
+      <AccessibilityProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <NavigationContainer>
+              <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
+              <AppNavigator />
+              <AccessibilityMenu />
+            </NavigationContainer>
+          </AuthProvider>
+        </ThemeProvider>
+      </AccessibilityProvider>
     </SafeAreaProvider>
   );
 }

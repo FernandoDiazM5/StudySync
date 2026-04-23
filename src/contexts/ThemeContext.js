@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext } from 'react';
+import { useAccessibility } from './AccessibilityContext';
 
 const light = {
   dark: false,
@@ -32,11 +33,44 @@ const dark = {
   divider: '#374151',
 };
 
+const highContrastDark = {
+  dark: true,
+  bg: '#000000',
+  card: '#0a0a0a',
+  text: '#F59E0B',
+  textSecondary: '#D97706',
+  textMuted: '#F5A623', // Improved: WCAG AA compliant (~15:1 contrast)
+  border: '#D97706',
+  input: '#000000',
+  inputBorder: '#F59E0B',
+  headerBg: '#111111',
+  tabBg: '#000000',
+  tabBorder: '#D97706',
+  divider: '#92400e',
+};
+
 const ThemeContext = createContext(null);
 
 export const ThemeProvider = ({ children }) => {
   const [isDark, setIsDark] = useState(false);
-  const theme = isDark ? dark : light;
+
+  // Access Accessibility Context to check if contrast mode is on
+  // Safe fallback if ThemeProvider is used without AccessibilityProvider
+  let isHighContrast = false;
+  try {
+    const accessibility = useAccessibility();
+    isHighContrast = accessibility?.contrastActive ?? false;
+  } catch (error) {
+    console.warn('AccessibilityContext not found, using default theme');
+  }
+
+  let theme = light;
+  if (isHighContrast) {
+    theme = highContrastDark;
+  } else if (isDark) {
+    theme = dark;
+  }
+
   const toggleTheme = () => setIsDark((prev) => !prev);
 
   return (

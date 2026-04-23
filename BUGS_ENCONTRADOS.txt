@@ -1,0 +1,126 @@
+================================================================================
+                     RESUMEN DE BUGS - MENÚ ACCESIBILIDAD
+================================================================================
+
+TOTAL BUGS ENCONTRADOS: 11
+├─ Críticos (🔴): 4
+├─ Altos (🟡): 5
+└─ Bajos (🟢): 2
+
+================================================================================
+                              BUGS CRÍTICOS
+================================================================================
+
+[1] IMPORT DINÁMICO INNECESARIO
+    Archivo: AccessibilityMenu.js:200-202
+    Problema: import('expo-speech') se ejecuta CADA VEZ que se desactiva
+    Impacto: 🔴 Degradación de performance, lag en UI
+    Línea: onPress={() => { import('expo-speech').then(...) }}
+    Fix: Importar una sola vez al inicio del archivo
+
+[2] SIN MANEJO DE ERRORES EN SPEECH API
+    Archivo: AccessibilityContext.js:131
+    Problema: Speech.speak() sin try-catch puede causar crash
+    Impacto: 🔴 Crash silencioso, app inestable
+    Línea: Speech.speak(text.toString(), { language: ... })
+    Fix: Envolver en try-catch con logging
+
+[3] MEMORY LEAK EN SPEECH
+    Archivo: AppText.js + AccessibilityMenu.js
+    Problema: Speech continúa reproduciéndose después de desmontar
+    Impacto: 🔴 Batería consumida, comportamiento anómalo
+    Línea: Sin useEffect cleanup
+    Fix: Agregar useEffect con Speech.stop() en cleanup
+
+[4] FALTA DE ACCESSIBILITY LABELS
+    Archivo: AccessibilityMenu.js (GridButton component)
+    Problema: Botones sin accessibilityLabel para screen readers
+    Impacto: 🔴 Inaccesible para usuarios ciegos/discapacitados visuales
+    Línea: <GridButton icon={Type} label={...} />
+    Fix: Agregar accessibilityLabel + accessibilityRole
+
+================================================================================
+                           PROBLEMAS ARQUITECTURA
+================================================================================
+
+[5] LÓGICA DE LEVEL INDICATOR CONFUSA
+    Archivo: AccessibilityMenu.js:54-58
+    Problema: Lógica de filled = idx <= currentLevel
+    Impacto: 🟡 Indicador visual incorrecto para botones toggle
+    Línea: if (levels === 1) { filled = currentLevel > 0 }
+           else { filled = idx <= currentLevel } // ❌ INCORRECTO
+
+[6] CIRCULAR DEPENDENCY SIN VALIDACIÓN
+    Archivo: ThemeContext.js:58
+    Problema: useAccessibility() puede fallar si no hay provider
+    Impacto: 🟡 Posible crash si se usa fuera del contexto correcto
+    Línea: const accessibility = useAccessibility();
+    Fix: Agregar try-catch o validación
+
+[7] FONT PARA DISLEXIA INCORRECTO
+    Archivo: AccessibilityContext.js:124
+    Problema: Usa 'monospace' en lugar de fuente especializada
+    Impacto: 🟡 UX subóptimo para usuarios dislexicos
+    Línea: const globalFontFamily = dyslexiaFontActive ? 'monospace' : undefined
+    Fix: Usar 'OpenDyslexic' o fuente especializada
+
+[8] FALLBACK IDIOMA SIN DOCUMENTAR
+    Archivo: AccessibilityContext.js:131
+    Problema: Quechua fallback a Español sin aviso al usuario
+    Impacto: 🟡 Confusión de usuario, sin feedback
+    Línea: language === 'qu' ? 'es' : language
+    Fix: Documentar con comentario + mapeo explícito
+
+[9] TEMA HIGH CONTRAST BAJO WCAG AA
+    Archivo: ThemeContext.js:42
+    Problema: textMuted (#B45309) tiene bajo contraste (~7:1)
+    Impacto: 🟡 No cumple WCAG AA (requiere 4.5:1 mínimo)
+    Línea: textMuted: '#B45309'
+    Fix: Cambiar a color más claro (~15:1)
+
+================================================================================
+                            ISSUES MENORES
+================================================================================
+
+[10] COMENTARIO MALFORMADO
+     Archivo: AccessibilityContext.js:100
+     Línea: "// Helper de  // Intérprete inteligente"
+     Fix: Limpiar comentario
+
+[11] PLACEHOLDER "PROFILE" INACTIVO
+     Archivo: AccessibilityMenu.js:152-160
+     Problema: Tiene ChevronDown pero sin funcionalidad
+     Impacto: 🟢 UX confusa (parece clickeable pero no es)
+     Fix: Remover o implementar funcionalidad
+
+================================================================================
+                        CHECKLIST DE CORRECCIONES
+================================================================================
+
+CRÍTICAS (Completar primero):
+  ☐ [1] Mover import de expo-speech al inicio de AccessibilityMenu.js
+  ☐ [2] Agregar try-catch en speakText() con error logging
+  ☐ [3] Agregar useEffect cleanup para Speech en AppText.js
+  ☐ [4] Agregar accessibilityLabel a GridButton + accesibilityRole
+
+ARQUITECTURA (Next sprint):
+  ☐ [5] Simplificar lógica de level indicator (filled = currentLevel > 0)
+  ☐ [6] Agregar validación en ThemeContext.js
+  ☐ [7] Reemplazar 'monospace' con OpenDyslexic
+  ☐ [8] Crear SPEECH_LANGUAGE_MAP con documentación
+  ☐ [9] Actualizar highContrastDark textMuted color
+
+MENORES (Backlog):
+  ☐ [10] Limpiar comentario línea 100
+  ☐ [11] Remover o implementar Profile collapse
+
+================================================================================
+                            ARCHIVOS AFECTADOS
+================================================================================
+
+src/components/AccessibilityMenu.js   [5 bugs]
+src/contexts/AccessibilityContext.js  [4 bugs]
+src/components/AppText.js             [1 bug]
+src/contexts/ThemeContext.js           [2 bugs]
+
+================================================================================

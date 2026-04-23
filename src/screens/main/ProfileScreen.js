@@ -2,14 +2,14 @@
 import React, { useState, useEffect } from "react";
 import {
   View,
-  Text,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
   Alert,
   StatusBar,
 } from "react-native";
+import Text from "../../components/AppText";
+import AppButton from "../../components/AppButton";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   User,
@@ -25,9 +25,11 @@ import {
   Sun,
   Eye,
   EyeOff,
+  Accessibility as AccessibilityIcon,
 } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { signOut, updatePassword } from "../../services/authService";
 import { updateUserProfile } from "../../services/firestoreService";
 
@@ -45,6 +47,9 @@ export default function ProfileScreen() {
   const [showNewPwd, setShowNewPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  // Accesibilidad
+  const { setIsMenuOpen, t } = useAccessibility();
 
   // Sincronizar estado local cuando cambia userProfile
   useEffect(() => {
@@ -116,10 +121,10 @@ export default function ProfileScreen() {
       <View style={[s.container, { backgroundColor: theme.bg }]}>
         <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
         <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
-          <TouchableOpacity onPress={() => setSubView("main")}>
+          <AppButton onPress={() => setSubView("main")}>
             <ChevronLeft color="#C7D2FE" size={24} />
-          </TouchableOpacity>
-          <Text style={s.subHeaderTitle}>Editar Perfil</Text>
+          </AppButton>
+          <Text style={s.subHeaderTitle}>{t('editProfile')}</Text>
         </View>
         <ScrollView contentContainerStyle={s.formContent}>
           <View style={[s.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -154,10 +159,10 @@ export default function ProfileScreen() {
               />
               <Text style={[s.hint, { color: theme.textMuted }]}>El correo no se puede modificar.</Text>
             </View>
-            <TouchableOpacity style={s.saveBtn} onPress={handleProfileSubmit}>
+            <AppButton style={s.saveBtn} onPress={handleProfileSubmit}>
               <User color="#FFF" size={16} />
               <Text style={s.saveBtnText}>Guardar Cambios</Text>
-            </TouchableOpacity>
+            </AppButton>
           </View>
         </ScrollView>
       </View>
@@ -170,10 +175,10 @@ export default function ProfileScreen() {
       <View style={[s.container, { backgroundColor: theme.bg }]}>
         <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
         <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
-          <TouchableOpacity onPress={() => setSubView("main")}>
+          <AppButton onPress={() => setSubView("main")}>
             <ChevronLeft color="#C7D2FE" size={24} />
-          </TouchableOpacity>
-          <Text style={s.subHeaderTitle}>Cambiar Contraseña</Text>
+          </AppButton>
+          <Text style={s.subHeaderTitle}>{t('changePassword')}</Text>
         </View>
         <ScrollView contentContainerStyle={s.formContent}>
           <View style={[s.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -191,9 +196,9 @@ export default function ProfileScreen() {
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
                 />
-                <TouchableOpacity style={s.eyeBtn} onPress={() => setShowCurrentPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <AppButton style={s.eyeBtn} onPress={() => setShowCurrentPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   {showCurrentPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
-                </TouchableOpacity>
+                </AppButton>
               </View>
             </View>
             <View>
@@ -207,9 +212,9 @@ export default function ProfileScreen() {
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
                 />
-                <TouchableOpacity style={s.eyeBtn} onPress={() => setShowNewPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <AppButton style={s.eyeBtn} onPress={() => setShowNewPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   {showNewPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
-                </TouchableOpacity>
+                </AppButton>
               </View>
             </View>
             <View>
@@ -223,15 +228,15 @@ export default function ProfileScreen() {
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
                 />
-                <TouchableOpacity style={s.eyeBtn} onPress={() => setShowConfirmPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <AppButton style={s.eyeBtn} onPress={() => setShowConfirmPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   {showConfirmPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
-                </TouchableOpacity>
+                </AppButton>
               </View>
             </View>
-            <TouchableOpacity style={s.saveBtn} onPress={handlePasswordSubmit}>
+            <AppButton style={s.saveBtn} onPress={handlePasswordSubmit}>
               <Lock color="#FFF" size={16} />
               <Text style={s.saveBtnText}>Guardar Contraseña</Text>
-            </TouchableOpacity>
+            </AppButton>
           </View>
         </ScrollView>
       </View>
@@ -255,7 +260,7 @@ export default function ProfileScreen() {
           <View style={[s.avatarCircle, { borderColor: theme.bg, backgroundColor: isDark ? "#312E81" : "#EEF2FF" }]}>
             <User color="#4F46E5" size={48} />
           </View>
-          <TouchableOpacity
+          <AppButton
             style={s.editAvatarBtn}
             onPress={() => {
               setEditName(userProfile?.name || "");
@@ -264,7 +269,7 @@ export default function ProfileScreen() {
             }}
           >
             <Edit3 color="#FFF" size={14} />
-          </TouchableOpacity>
+          </AppButton>
         </View>
         <Text style={[s.userName, { color: theme.text }]}>{userProfile?.name || "Usuario"}</Text>
         <Text style={[s.userEmail, { color: theme.textSecondary }]}>{userProfile?.email || ""}</Text>
@@ -283,9 +288,9 @@ export default function ProfileScreen() {
         <View style={[s.settingsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={[s.settingsHeader, { backgroundColor: isDark ? "#1F2937" : "#FAFAFA", borderBottomColor: theme.divider }]}>
             <Settings color={theme.textSecondary} size={16} />
-            <Text style={[s.settingsTitle, { color: theme.textSecondary }]}>AJUSTES DE CUENTA</Text>
+            <Text style={[s.settingsTitle, { color: theme.textSecondary }]}>{t('accountSettings')}</Text>
           </View>
-          <TouchableOpacity
+          <AppButton
             style={s.settingsRow}
             onPress={() => {
               setEditName(userProfile?.name || "");
@@ -297,12 +302,12 @@ export default function ProfileScreen() {
               <View style={[s.settingsIcon, { backgroundColor: "#EFF6FF" }]}>
                 <User color="#2563EB" size={16} />
               </View>
-              <Text style={[s.settingsLabel, { color: theme.text }]}>Editar información personal</Text>
+              <Text style={[s.settingsLabel, { color: theme.text }]}>{t('personalInfo')}</Text>
             </View>
             <ChevronRight color={theme.textMuted} size={16} />
-          </TouchableOpacity>
+          </AppButton>
           <View style={[s.divider, { backgroundColor: theme.divider }]} />
-          <TouchableOpacity
+          <AppButton
             style={s.settingsRow}
             onPress={() => setSubView("password")}
           >
@@ -310,12 +315,12 @@ export default function ProfileScreen() {
               <View style={[s.settingsIcon, { backgroundColor: "#FFF7ED" }]}>
                 <Lock color="#EA580C" size={16} />
               </View>
-              <Text style={[s.settingsLabel, { color: theme.text }]}>Cambiar contraseña</Text>
+              <Text style={[s.settingsLabel, { color: theme.text }]}>{t('changePassword')}</Text>
             </View>
             <ChevronRight color={theme.textMuted} size={16} />
-          </TouchableOpacity>
+          </AppButton>
           <View style={[s.divider, { backgroundColor: theme.divider }]} />
-          <TouchableOpacity
+          <AppButton
             style={s.settingsRow}
             onPress={() => setNotificationsEnabled((prev) => !prev)}
             activeOpacity={0.7}
@@ -325,7 +330,7 @@ export default function ProfileScreen() {
                 <Bell color="#9333EA" size={16} />
               </View>
               <View>
-                <Text style={[s.settingsLabel, { color: theme.text }]}>Notificaciones push</Text>
+                <Text style={[s.settingsLabel, { color: theme.text }]}>{t('pushNotifications')}</Text>
                 <Text style={s.settingsHint}>Alertas de tareas pendientes</Text>
               </View>
             </View>
@@ -334,9 +339,9 @@ export default function ProfileScreen() {
                 style={[s.toggleKnob, !notificationsEnabled && s.toggleKnobOff]}
               />
             </View>
-          </TouchableOpacity>
+          </AppButton>
           <View style={[s.divider, { backgroundColor: theme.divider }]} />
-          <TouchableOpacity
+          <AppButton
             style={s.settingsRow}
             onPress={toggleTheme}
             activeOpacity={0.7}
@@ -346,21 +351,38 @@ export default function ProfileScreen() {
                 {isDark ? <Moon color="#60A5FA" size={16} /> : <Sun color="#F59E0B" size={16} />}
               </View>
               <View>
-                <Text style={[s.settingsLabel, { color: theme.text }]}>Tema de la aplicación</Text>
+                <Text style={[s.settingsLabel, { color: theme.text }]}>{t('themeApp')}</Text>
                 <Text style={s.settingsHint}>{isDark ? "Modo oscuro activo" : "Modo claro activo"}</Text>
               </View>
             </View>
             <View style={[s.toggle, !isDark && s.toggleOff, isDark && { backgroundColor: "#60A5FA" }]}>
               <View style={[s.toggleKnob, !isDark && s.toggleKnobOff]} />
             </View>
-          </TouchableOpacity>
+          </AppButton>
+          <View style={[s.divider, { backgroundColor: theme.divider }]} />
+          <AppButton
+            style={s.settingsRow}
+            onPress={() => setIsMenuOpen(true)}
+            activeOpacity={0.7}
+          >
+            <View style={s.settingsLeft}>
+              <View style={[s.settingsIcon, { backgroundColor: isDark ? "#14532D" : "#F0FDF4" }]}>
+                <AccessibilityIcon color="#16A34A" size={16} />
+              </View>
+              <View>
+                <Text style={[s.settingsLabel, { color: theme.text }]}>Menú de Accesibilidad</Text>
+                <Text style={s.settingsHint}>Tamaño de texto, contrastes y dislexia</Text>
+              </View>
+            </View>
+            <ChevronRight color={theme.textMuted} size={16} />
+          </AppButton>
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
+        <AppButton style={s.logoutBtn} onPress={handleLogout}>
           <LogOut color="#DC2626" size={20} />
-          <Text style={s.logoutText}>Cerrar Sesión Segura</Text>
-        </TouchableOpacity>
+          <Text style={s.logoutText}>{t('logoutSecure')}</Text>
+        </AppButton>
       </ScrollView>
     </View>
   );
@@ -436,7 +458,7 @@ const s = StyleSheet.create({
   // Main profile
   profileHeader: {
     backgroundColor: "#4F46E5",
-    height: 128,
+    minHeight: 128,
     paddingTop: 48,
     alignItems: "center",
   },

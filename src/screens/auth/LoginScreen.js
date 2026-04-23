@@ -6,9 +6,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
-  Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -31,8 +29,12 @@ const shadow = (color, opacity, radius, offsetY, elevation) =>
   });
 import { BookOpen, Eye, EyeOff } from "lucide-react-native";
 import { signIn } from "../../services/authService";
+import Text from "../../components/AppText";
+import AppButton from "../../components/AppButton";
+import { useAccessibility } from "../../contexts/AccessibilityContext";
 
 const LETTERS = "StudySync".split("");
+const AnimatedAppText = Animated.createAnimatedComponent(Text);
 
 function WaveText() {
   const anims = useRef(LETTERS.map(() => new Animated.Value(0))).current;
@@ -65,12 +67,12 @@ function WaveText() {
       }}
     >
       {LETTERS.map((letter, i) => (
-        <Animated.Text
+        <AnimatedAppText
           key={i}
           style={[styles.title, { transform: [{ translateY: anims[i] }] }]}
         >
           {letter}
-        </Animated.Text>
+        </AnimatedAppText>
       ))}
     </View>
   );
@@ -82,6 +84,7 @@ export default function LoginScreen({ navigation }) {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const { t } = useAccessibility();
 
   const handleLogin = async () => {
     setErrorMsg("");
@@ -127,7 +130,7 @@ export default function LoginScreen({ navigation }) {
         {/* Formulario */}
         <View style={styles.form}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
+            <Text style={styles.label}>{t('email').toUpperCase()}</Text>
             <TextInput
               style={styles.input}
               placeholder="tu@uni.edu"
@@ -141,7 +144,7 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>CONTRASEÑA</Text>
+            <Text style={styles.label}>{t('password').toUpperCase()}</Text>
             <View style={styles.pwdRow}>
               <TextInput
                 style={[styles.input, styles.pwdInput]}
@@ -151,19 +154,20 @@ export default function LoginScreen({ navigation }) {
                 value={password}
                 onChangeText={setPassword}
               />
-              <TouchableOpacity
+              <AppButton
                 style={styles.eyeBtn}
+                overrideText={showPwd ? 'Ocultar Contraseña' : 'Mostrar Contraseña'}
                 onPress={() => setShowPwd((v) => !v)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 {showPwd
                   ? <EyeOff color="#9CA3AF" size={18} />
                   : <Eye color="#9CA3AF" size={18} />}
-              </TouchableOpacity>
+              </AppButton>
             </View>
           </View>
 
-          <TouchableOpacity
+          <AppButton
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
@@ -172,17 +176,17 @@ export default function LoginScreen({ navigation }) {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.buttonText}>Iniciar Sesión</Text>
+              <Text style={styles.buttonText}>{t('login')}</Text>
             )}
-          </TouchableOpacity>
+          </AppButton>
         </View>
 
-        <TouchableOpacity
+        <AppButton
           onPress={() => navigation.navigate("Register")}
           style={styles.registerLink}
         >
-          <Text style={styles.registerText}>Crear una cuenta nueva</Text>
-        </TouchableOpacity>
+          <Text style={styles.registerText}>{t('register')}</Text>
+        </AppButton>
       </View>
     </KeyboardAvoidingView>
   );
