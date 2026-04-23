@@ -2,7 +2,6 @@
 import React, { useState } from "react";
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -10,35 +9,38 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
+import Text from "../../components/AppText";
+import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { ChevronLeft, Users } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { createGroup } from "../../services/firestoreService";
 
 export default function CreateGroupScreen({ navigation }) {
   const { user } = useAuth();
+  const { t } = useAccessibility();
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleCreateGroup = async () => {
     if (!name.trim()) {
-      Alert.alert("Error", "El nombre del grupo es obligatorio.");
+      Alert.alert(t('error'), t('groupNameRequired'));
       return;
     }
     setLoading(true);
     try {
       await createGroup({
         name: name.trim(),
-        desc: desc.trim() || "Grupo de trabajo",
+        desc: desc.trim() || t('defaultGroupDesc'),
         leaderId: user.uid,
         members: [user.uid],
       });
-      Alert.alert("Éxito", "Grupo creado con éxito", [
+      Alert.alert(t('success'), t('groupCreatedSuccess'), [
         { text: "OK", onPress: () => navigation.goBack() },
       ]);
     } catch (e) {
       console.error("Error al crear grupo:", e);
-      Alert.alert("Error", e?.message || "No se pudo crear el grupo.");
+      Alert.alert(t('error'), e?.message || t('operationError'));
     }
     setLoading(false);
   };
@@ -50,7 +52,7 @@ export default function CreateGroupScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <ChevronLeft color="#6B7280" size={24} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Nuevo Grupo</Text>
+        <Text style={s.headerTitle}>{t('createNewGroup')}</Text>
         <View style={{ width: 24 }} />
       </View>
       <View style={s.form}>
@@ -58,23 +60,23 @@ export default function CreateGroupScreen({ navigation }) {
           <Users color="#4F46E5" size={32} />
         </View>
         <Text style={s.subtitle}>
-          Crea un nuevo espacio de trabajo para tu materia o proyecto.
+          {t('groupDescription') || 'Crea un nuevo espacio de trabajo para tu materia o proyecto.'}
         </Text>
         <View>
-          <Text style={s.label}>NOMBRE DE LA MATERIA</Text>
+          <Text style={s.label}>{t('groupName').toUpperCase()}</Text>
           <TextInput
             style={s.input}
-            placeholder="Ej: Programación Web"
+            placeholder={t('exampleGroupName')}
             placeholderTextColor="#9CA3AF"
             value={name}
             onChangeText={setName}
           />
         </View>
         <View>
-          <Text style={s.label}>DESCRIPCIÓN O PROYECTO (OPCIONAL)</Text>
+          <Text style={s.label}>{t('groupDescription').toUpperCase()} (OPCIONAL)</Text>
           <TextInput
             style={s.input}
-            placeholder="Ej: Grupo 4 - Proyecto Final"
+            placeholder={t('exampleGroupDesc')}
             placeholderTextColor="#9CA3AF"
             value={desc}
             onChangeText={setDesc}
@@ -88,7 +90,7 @@ export default function CreateGroupScreen({ navigation }) {
           {loading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={s.btnText}>Crear Grupo</Text>
+            <Text style={s.btnText}>{t('createGroup')}</Text>
           )}
         </TouchableOpacity>
       </View>

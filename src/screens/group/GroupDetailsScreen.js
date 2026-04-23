@@ -7,7 +7,6 @@
 import React, { useState, useEffect } from "react";
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   FlatList,
@@ -16,6 +15,8 @@ import {
   StatusBar,
   Modal,
 } from "react-native";
+import Text from "../../components/AppText";
+import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChevronLeft,
@@ -38,6 +39,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
   const { groupId } = route.params;
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
+  const { t } = useAccessibility();
   const insets = useSafeAreaInsets();
   const [group, setGroup] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -111,7 +113,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
   const handleSendInvitation = async () => {
     const email = inviteEmail.trim().toLowerCase();
     if (!email) {
-      Alert.alert("Error", "Ingresa un correo electrónico");
+      Alert.alert(t('error'), t('enterValidEmail'));
       return;
     }
     setInviting(true);
@@ -119,14 +121,14 @@ export default function GroupDetailsScreen({ route, navigation }) {
       const target = await firestoreService.getUserByEmail(email);
       if (!target) {
         Alert.alert(
-          "No encontrado",
-          "No existe ningún usuario registrado con ese correo.",
+          t('userNotFound'),
+          t('userNotFoundMsg'),
         );
         setInviting(false);
         return;
       }
       if (target.id === user.uid) {
-        Alert.alert("Error", "No puedes invitarte a ti mismo.");
+        Alert.alert(t('error'), t('cantInviteSelf'));
         setInviting(false);
         return;
       }
@@ -139,8 +141,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
       });
       setInviteModalVisible(false);
       Alert.alert(
-        "Invitación enviada",
-        `Se envió una invitación a ${target.name || email}.`,
+        t('invitationSent'),
+        t('invitationSentMsg'),
       );
     } catch (e) {
       Alert.alert("Error", e.message || "No se pudo enviar la invitación");
@@ -184,12 +186,12 @@ export default function GroupDetailsScreen({ route, navigation }) {
       );
 
       if (uploadResult.success) {
-        Alert.alert("Éxito", `"${file.name}" subido correctamente.`);
+        Alert.alert(t('success'), t('uploadSuccess'));
       } else {
         Alert.alert("Error", uploadResult.error || "No se pudo subir el archivo.");
       }
     } catch (e) {
-      Alert.alert("Error", "No se pudo abrir el selector de archivos.");
+      Alert.alert(t('error'), t('couldNotOpenPicker'));
     } finally {
       setUploading(false);
     }
@@ -197,12 +199,12 @@ export default function GroupDetailsScreen({ route, navigation }) {
 
   const handleRemoveMember = (memberId, memberName) => {
     Alert.alert(
-      "Confirmar",
-      `¿Estás seguro de expulsar a ${memberName} del grupo?`,
+      t('confirm'),
+      t('kickMemberMsg'),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t('cancel'), style: "cancel" },
         {
-          text: "Expulsar",
+          text: t('kickMember'),
           style: "destructive",
           onPress: async () => {
             await firestoreService.removeMemberFromGroup(groupId, memberId);
@@ -221,7 +223,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
 
   const handleSaveGroup = async () => {
     if (!editName.trim()) {
-      Alert.alert("Error", "El nombre del grupo es obligatorio.");
+      Alert.alert(t('error'), t('groupNameRequiredAlert'));
       return;
     }
     setSaving(true);
@@ -232,9 +234,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
       });
       setGroup((prev) => ({ ...prev, name: editName.trim(), description: editDescription.trim() }));
       setEditModalVisible(false);
-      Alert.alert("Éxito", "Grupo actualizado correctamente.");
+      Alert.alert(t('success'), t('groupUpdated'));
     } catch (e) {
-      Alert.alert("Error", "No se pudo actualizar el grupo.");
+      Alert.alert(t('error'), t('groupUpdateError'));
     } finally {
       setSaving(false);
     }
@@ -248,7 +250,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
   if (loading || !group) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.bg }]}>
-        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Cargando...</Text>
+        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>{t('loading')}</Text>
       </View>
     );
   }
@@ -272,7 +274,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
         <View style={styles.headerInfo}>
           <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">{group.name}</Text>
           <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
-            {group.members?.length || 0} miembros | Líder: {leaderName}
+            {group.members?.length || 0} {t('members')} | {t('admin')}: {leaderName}
           </Text>
         </View>
         {isLeader ? (
@@ -304,8 +306,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
               ]}
             >
               {tab === "tareas"
-                ? `TAREAS (${tasks.length})`
-                : tab.toUpperCase()}
+                ? `${t('tasks').toUpperCase()} (${tasks.length})`
+                : tab === "archivos" ? t('attachFile').toUpperCase() : t('members').toUpperCase()}
             </Text>
           </TouchableOpacity>
         ))}
@@ -319,9 +321,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
             {tasks.length === 0 ? (
               <EmptyState
                 icon={CheckSquare}
-                title="¡Todo al día!"
-                message="No hay tareas asignadas en este grupo actualmente."
-                actionText={isLeader ? "Agregar Nueva Tarea" : null}
+                title={t('allTasksDone')}
+                message={t('noTasksAssigned')}
+                actionText={isLeader ? t('addNewTask') : null}
                 onAction={() => navigation.navigate("CreateTask", { groupId })}
               />
             ) : (
@@ -353,7 +355,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     >
                       <Plus color="#4F46E5" size={16} />
                       <Text style={styles.addButtonText}>
-                        Agregar Nueva Tarea
+                        {t('createTask')}
                       </Text>
                     </TouchableOpacity>
                   )
@@ -369,9 +371,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
             {files.length === 0 ? (
               <EmptyState
                 icon={FileText}
-                title="Sin documentos"
-                message="Aún no hay archivos compartidos en este grupo."
-                actionText={uploading ? "Subiendo..." : "Subir Archivo"}
+                title={t('noDocuments')}
+                message={t('noFilesShared')}
+                actionText={uploading ? t('uploading') : t('uploadFile')}
                 onAction={uploading ? null : handleFileUpload}
               />
             ) : (
@@ -389,7 +391,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                       <View>
                         <Text style={[styles.fileName, { color: theme.text }]}>{file.name}</Text>
                         <Text style={[styles.fileDate, { color: theme.textMuted }]}>
-                          Subido el{" "}
+                          {t('uploadedOn')}{" "}
                           {file.uploadedAt
                             ? new Date(file.uploadedAt).toLocaleDateString(
                                 "es-ES",
@@ -414,7 +416,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     disabled={uploading}
                   >
                     <Text style={[styles.addButtonDashedText, { color: theme.textSecondary }]}>
-                      {uploading ? "Subiendo..." : "Subir Archivo"}
+                      {uploading ? t('uploading') : t('uploadFile')}
                     </Text>
                   </TouchableOpacity>
                 }
@@ -440,7 +442,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     <Text style={[styles.memberName, { color: theme.text }]}>{member.name}</Text>
                     <View style={member.id === group.leaderId ? styles.badgeLeader : styles.badgeMember}>
                       <Text style={member.id === group.leaderId ? styles.badgeLeaderText : styles.badgeMemberText}>
-                        {member.id === group.leaderId ? "Líder" : "Miembro"}
+                        {member.id === group.leaderId ? t('admin') : t('member')}
                       </Text>
                     </View>
                   </View>
@@ -450,7 +452,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     onPress={() => handleRemoveMember(member.id, member.name)}
                     style={styles.removeButton}
                   >
-                    <Text style={styles.removeButtonText}>Expulsar</Text>
+                    <Text style={styles.removeButtonText}>{t('removeMember')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -468,7 +470,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                   activeOpacity={0.7}
                 >
                   <UserPlus color="#4F46E5" size={16} />
-                  <Text style={styles.addButtonText}>Invitar Miembro</Text>
+                  <Text style={styles.addButtonText}>{t('inviteMembers')}</Text>
                 </TouchableOpacity>
               )
             }
@@ -486,7 +488,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
           activeOpacity={0.8}
         >
           <MessageSquare color="#FFFFFF" size={20} />
-          <Text style={styles.chatButtonText}>Abrir Chat del Trabajo</Text>
+          <Text style={styles.chatButtonText}>{t('chat')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -500,25 +502,25 @@ export default function GroupDetailsScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: theme.card }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Editar Grupo</Text>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>{t('editGroup')}</Text>
             <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-              Modifica el nombre y descripción del grupo.
+              {t('editGroupDesc')}
             </Text>
-            <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>NOMBRE DEL GRUPO</Text>
+            <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>{t('groupNameLabel')}</Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
               value={editName}
               onChangeText={setEditName}
-              placeholder="Nombre del grupo"
+              placeholder={t('groupNamePlaceholder2')}
               placeholderTextColor={theme.textMuted}
               editable={!saving}
             />
-            <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>DESCRIPCIÓN (OPCIONAL)</Text>
+            <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>{t('groupDescLabel')}</Text>
             <TextInput
               style={[styles.modalInput, { minHeight: 80, textAlignVertical: "top", backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
               value={editDescription}
               onChangeText={setEditDescription}
-              placeholder="Descripción del grupo..."
+              placeholder={t('groupDescPlaceholder')}
               placeholderTextColor={theme.textMuted}
               multiline
               editable={!saving}
@@ -529,14 +531,14 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 onPress={() => setEditModalVisible(false)}
                 disabled={saving}
               >
-                <Text style={[styles.modalCancelText, { color: theme.text }]}>Cancelar</Text>
+                <Text style={[styles.modalCancelText, { color: theme.text }]}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalSendBtn, saving && { opacity: 0.6 }]}
                 onPress={handleSaveGroup}
                 disabled={saving}
               >
-                <Text style={styles.modalSendText}>{saving ? "Guardando..." : "Guardar"}</Text>
+                <Text style={styles.modalSendText}>{saving ? t('loading') : t('save')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -553,13 +555,13 @@ export default function GroupDetailsScreen({ route, navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: theme.card }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Invitar Miembro</Text>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>{t('inviteMemberTitle')}</Text>
             <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-              Ingresa el correo del usuario que quieres invitar al grupo.
+              {t('enterEmailInvite')}
             </Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-              placeholder="correo@ejemplo.com"
+              placeholder={t('emailExamplePlaceholder')}
               placeholderTextColor={theme.textMuted}
               value={inviteEmail}
               onChangeText={setInviteEmail}
@@ -574,7 +576,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 onPress={() => setInviteModalVisible(false)}
                 disabled={inviting}
               >
-                <Text style={[styles.modalCancelText, { color: theme.text }]}>Cancelar</Text>
+                <Text style={[styles.modalCancelText, { color: theme.text }]}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -586,7 +588,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 disabled={inviting}
               >
                 <Text style={styles.modalSendText}>
-                  {inviting ? "Enviando..." : "Enviar"}
+                  {inviting ? t('loading') : t('send')}
                 </Text>
               </TouchableOpacity>
             </View>

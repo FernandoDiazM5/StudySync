@@ -6,7 +6,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -17,6 +16,8 @@ import {
   ScrollView,
   StatusBar,
 } from 'react-native';
+import Text from '../../components/AppText';
+import { useAccessibility } from '../../contexts/AccessibilityContext';
 import { Users, ChevronLeft, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react-native';
 import { registerUser } from '../../services/authService';
 
@@ -36,6 +37,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^\+?[\d\s\-()]{7,15}$/;
 
 export default function RegisterScreen({ navigation }) {
+  const { t } = useAccessibility();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -48,37 +50,37 @@ export default function RegisterScreen({ navigation }) {
 
   const errors = {
     name: !name.trim()
-      ? 'El nombre es obligatorio.'
+      ? t('nameRequired')
       : name.trim().split(/\s+/).length < 2
-      ? 'Ingresa nombre y apellido.'
+      ? t('nameAndLastname')
       : name.trim().length < 3
-      ? 'El nombre es muy corto.'
+      ? t('nameTooShort')
       : null,
     email: !email.trim()
-      ? 'El correo es obligatorio.'
+      ? t('emailRequired2')
       : !EMAIL_REGEX.test(email.trim())
-      ? 'Ingresa un correo válido.'
+      ? t('emailInvalid')
       : null,
     phone: !phone.trim()
-      ? 'El celular es obligatorio.'
+      ? t('phoneTooShort')
       : !PHONE_REGEX.test(phone.trim())
-      ? 'Ingresa un número válido (7-15 dígitos).'
+      ? t('phoneInvalid')
       : null,
     password: !password
-      ? 'La contraseña es obligatoria.'
+      ? t('passwordTooShort')
       : password.length < 8
-      ? 'Mínimo 8 caracteres.'
+      ? t('passwordTooShort')
       : !/[A-Z]/.test(password)
-      ? 'Debe tener al menos una mayúscula.'
+      ? t('passwordWeak')
       : !/[0-9]/.test(password)
-      ? 'Debe tener al menos un número.'
+      ? t('passwordWeak')
       : !/[^A-Za-z0-9]/.test(password)
-      ? 'Debe tener al menos un carácter especial.'
+      ? t('passwordWeak')
       : null,
     confirmPassword: !confirmPassword
-      ? 'Repite la contraseña.'
+      ? t('passwordNoSpace')
       : password !== confirmPassword
-      ? 'Las contraseñas no coinciden.'
+      ? t('passwordsDontMatch2')
       : null,
   };
 
@@ -95,7 +97,7 @@ export default function RegisterScreen({ navigation }) {
     setLoading(false);
 
     if (!result.success) {
-      Alert.alert('Error', result.error);
+      Alert.alert(t('error'), result.error);
     }
   };
 
@@ -124,16 +126,16 @@ export default function RegisterScreen({ navigation }) {
             <Users color="#FFFFFF" size={32} />
           </View>
 
-          <Text style={styles.title}>Nueva Cuenta</Text>
-          <Text style={styles.subtitle}>Únete a tu equipo de trabajo.</Text>
+          <Text style={styles.title}>{t('registerTitle')}</Text>
+          <Text style={styles.subtitle}>{t('registerSubtitle')}</Text>
 
           {/* Formulario */}
           <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>NOMBRE COMPLETO</Text>
+              <Text style={styles.label}>{t('fullName').toUpperCase()}</Text>
               <TextInput
                 style={[styles.input, touched.name && errors.name && styles.inputError]}
-                placeholder="Ej. Carlos Mendoza"
+                placeholder={t('exampleName')}
                 placeholderTextColor="#9CA3AF"
                 autoCapitalize="words"
                 value={name}
@@ -144,10 +146,10 @@ export default function RegisterScreen({ navigation }) {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
+              <Text style={styles.label}>{t('email').toUpperCase()}</Text>
               <TextInput
                 style={[styles.input, touched.email && errors.email && styles.inputError]}
-                placeholder="tu@uni.edu"
+                placeholder={t('exampleEmail')}
                 placeholderTextColor="#9CA3AF"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -160,10 +162,10 @@ export default function RegisterScreen({ navigation }) {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>NÚMERO DE CELULAR</Text>
+              <Text style={styles.label}>{t('phoneNumber').toUpperCase()}</Text>
               <TextInput
                 style={[styles.input, touched.phone && errors.phone && styles.inputError]}
-                placeholder="Ej. 999 999 999"
+                placeholder={t('examplePhone')}
                 placeholderTextColor="#9CA3AF"
                 keyboardType="phone-pad"
                 value={phone}
@@ -174,7 +176,7 @@ export default function RegisterScreen({ navigation }) {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>CONTRASEÑA</Text>
+              <Text style={styles.label}>{t('password').toUpperCase()}</Text>
               <View style={styles.pwdRow}>
                 <TextInput
                   style={[styles.input, styles.pwdInput, touched.password && errors.password && styles.inputError]}
@@ -197,7 +199,7 @@ export default function RegisterScreen({ navigation }) {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>REPETIR CONTRASEÑA</Text>
+              <Text style={styles.label}>{t('confirmPassword').toUpperCase()}</Text>
               <View style={[
                 styles.confirmRow,
                 confirmPassword.length > 0 && (
@@ -242,7 +244,7 @@ export default function RegisterScreen({ navigation }) {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.buttonText}>REGISTRARSE</Text>
+                <Text style={styles.buttonText}>{t('register').toUpperCase()}</Text>
               )}
             </TouchableOpacity>
           </View>

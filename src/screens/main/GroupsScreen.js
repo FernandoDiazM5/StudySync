@@ -7,7 +7,6 @@
 import React, { useState, useEffect } from "react";
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   FlatList,
@@ -15,6 +14,8 @@ import {
   StatusBar,
   Alert,
 } from "react-native";
+import Text from "../../components/AppText";
+import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Search,
@@ -39,6 +40,7 @@ import * as firestoreService from "../../services/firestoreService";
 export default function GroupsScreen({ navigation }) {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { t } = useAccessibility();
   const insets = useSafeAreaInsets();
   const [groups, setGroups] = useState([]);
   const [groupTasks, setGroupTasks] = useState({});
@@ -171,18 +173,18 @@ export default function GroupsScreen({ navigation }) {
                 <View style={styles.pendingBadge}>
                   <Clock color="#D97706" size={12} />
                   <Text style={styles.pendingText}>
-                    {pendingTasks.length} tarea(s) pendiente(s)
+                    {`${pendingTasks.length} ${t('pendingTasksBadge')}`}
                   </Text>
                 </View>
               ) : totalTasks === 0 ? (
                 <View style={styles.notStartedBadge}>
                   <Clock color="#6B7280" size={12} />
-                  <Text style={styles.notStartedText}>Por iniciar</Text>
+                  <Text style={styles.notStartedText}>{t('workNotStarted')}</Text>
                 </View>
               ) : (
                 <View style={styles.completedBadge}>
                   <CheckSquare color="#16A34A" size={12} />
-                  <Text style={styles.completedText}>Al día</Text>
+                  <Text style={styles.completedText}>{t('workUpToDate')}</Text>
                 </View>
               )}
             </View>
@@ -196,7 +198,7 @@ export default function GroupsScreen({ navigation }) {
         {totalTasks > 0 && (
           <View style={styles.progressSection}>
             <View style={styles.progressHeader}>
-              <Text style={styles.progressLabel}>Progreso del trabajo</Text>
+              <Text style={styles.progressLabel}>{t('workProgress')}</Text>
               <Text style={styles.progressValue}>
                 {progressPercentage}% ({completedTasks}/{totalTasks})
               </Text>
@@ -223,7 +225,7 @@ export default function GroupsScreen({ navigation }) {
       <View style={[styles.header, { backgroundColor: theme.headerBg }]}>
         <View>
           <Text style={styles.headerTitle}>StudySync</Text>
-          <Text style={styles.headerSubtitle}>Tu espacio de trabajo</Text>
+          <Text style={styles.headerSubtitle}>{t('workspaceSubtitle')}</Text>
         </View>
       </View>
 
@@ -233,7 +235,7 @@ export default function GroupsScreen({ navigation }) {
           <Search color={theme.textMuted} size={16} style={styles.searchIcon} />
           <TextInput
             style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Buscar grupo..."
+            placeholder={t('searchGroup')}
             placeholderTextColor={theme.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -262,7 +264,7 @@ export default function GroupsScreen({ navigation }) {
               <View style={styles.invitationsHeader}>
                 <Mail color="#4F46E5" size={16} />
                 <Text style={[styles.invitationsTitle, { color: theme.text }]}>
-                  Invitaciones pendientes ({invitations.length})
+                  {t('pendingInvitations')} ({invitations.length})
                 </Text>
               </View>
               {invitations.map((inv) => (
@@ -272,7 +274,7 @@ export default function GroupsScreen({ navigation }) {
                       {inv.groupName}
                     </Text>
                     <Text style={styles.invitationText}>
-                      {inv.invitedByName || "Alguien"} te invitó a unirte
+                      {inv.invitedByName || t('someoneInvited')} te invitó a unirte
                     </Text>
                   </View>
                   <View style={styles.invitationActions}>
@@ -301,8 +303,8 @@ export default function GroupsScreen({ navigation }) {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
                 {searchQuery
-                  ? "No se encontraron grupos"
-                  : "No perteneces a ningún grupo aún"}
+                  ? `${t('search')}: "${searchQuery}" - ${t('noGroupsYet')}`
+                  : t('noGroupsYet')}
               </Text>
             </View>
           )

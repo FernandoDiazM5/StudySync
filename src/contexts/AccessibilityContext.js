@@ -1,5 +1,8 @@
-import React, { createContext, useState, useContext, useMemo } from 'react';
+import React, { createContext, useState, useContext, useMemo, useEffect } from 'react';
+import { Platform } from 'react-native';
 import * as Speech from 'expo-speech';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TRANSLATIONS } from '../locales/translations';
 
 // Mapeo de idiomas soportados por expo-speech
 // Nota: Quechua no es soportado, usa español como fallback
@@ -9,101 +12,64 @@ const SPEECH_LANGUAGE_MAP = {
   'qu': 'es', // Quechua fallback a español
 };
 
-// DICCIONARIO BÁSICO INCORPORADO
-const translations = {
-  es: {
-    language: 'Idioma',
-    spanish: 'Español',
-    english: 'Inglés',
-    quechua: 'Quechua',
-    profile: 'Perfil',
-    textSize: 'Tamaño de texto',
-    contrasts: 'Contrastes',
-    dyslexiaFriendly: 'Dislexia amigable',
-    lineSpacing: 'Interlineado',
-    narrator: 'Narrador',
-    reset: 'Restablecer',
-    accessibilityMenu: 'Menú de accesibilidad',
-    // Global App Strings
-    logoutSecure: 'Cerrar Sesión Segura',
-    personalInfo: 'Editar información personal',
-    changePassword: 'Cambiar contraseña',
-    pushNotifications: 'Notificaciones push',
-    themeApp: 'Tema de la aplicación',
-    accountSettings: 'AJUSTES DE CUENTA',
-    editProfile: 'Editar Perfil',
-    login: 'Iniciar Sesión',
-    register: 'Registrarse',
-    email: 'Correo Electrónico',
-    password: 'Contraseña'
-  },
-  en: {
-    language: 'Language',
-    spanish: 'Spanish',
-    english: 'English',
-    quechua: 'Quechuan',
-    profile: 'Profile',
-    textSize: 'Text Size',
-    contrasts: 'Contrasts',
-    dyslexiaFriendly: 'Dyslexia Friendly',
-    lineSpacing: 'Line Spacing',
-    narrator: 'Narrator',
-    reset: 'Reset',
-    accessibilityMenu: 'Accessibility Menu',
-    // Global App Strings
-    logoutSecure: 'Secure Logout',
-    personalInfo: 'Edit personal information',
-    changePassword: 'Change password',
-    pushNotifications: 'Push notifications',
-    themeApp: 'App Theme',
-    accountSettings: 'ACCOUNT SETTINGS',
-    editProfile: 'Edit Profile',
-    login: 'Login',
-    register: 'Register',
-    email: 'Email Address',
-    password: 'Password'
-  },
-  qu: {
-    language: 'Simi',
-    spanish: 'Kastilla simi',
-    english: 'Inles simi',
-    quechua: 'Qhichwa simi',
-    profile: 'Kawsay qillqa',
-    textSize: 'Qillqa hatun',
-    contrasts: 'Llimphi',
-    dyslexiaFriendly: 'Dislexia alli',
-    lineSpacing: 'Sutha',
-    narrator: 'Rimariq',
-    reset: 'Kutichiy',
-    accessibilityMenu: 'Yaykuy llikamanta',
-    // Global App Strings
-    logoutSecure: 'Lluqsiy Segura',
-    personalInfo: 'Sutiykita allichay',
-    changePassword: 'Contraseña musuqyachiy',
-    pushNotifications: 'Willakuykuna',
-    themeApp: 'Llimphi churasqa',
-    accountSettings: 'KAWSAY QILLQA ALLICHAY',
-    editProfile: 'Kawsay qillqa allichay',
-    login: 'Yaykuy',
-    register: 'Qillqakuy',
-    email: 'Correo Electrónico',
-    password: 'Contraseña'
-  }
-};
+const STORAGE_KEY = '@studysync_accessibility';
+
+const translations = TRANSLATIONS;
 
 const AccessibilityContext = createContext(null);
 
 export const AccessibilityProvider = ({ children }) => {
   // Estados de Configuración
-  const [language, setLanguage] = useState('es'); // 'es', 'en', 'qu'
-  const [textLevel, setTextLevel] = useState(0); // 0: Normal, 1: Grande, 2: Muy Grande
+  const [language, setLanguage] = useState('es');
+  const [textLevel, setTextLevel] = useState(0);
   const [contrastActive, setContrastActive] = useState(false);
   const [dyslexiaFontActive, setDyslexiaFontActive] = useState(false);
-  const [spacingLevel, setSpacingLevel] = useState(0); // 0: Normal, 1: Medio, 2: Amplio
+  const [spacingLevel, setSpacingLevel] = useState(0);
   const [speechEnabled, setSpeechEnabled] = useState(false);
-  
-  // Modal de accesibilidad visibilidad
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Cargar configuración guardada al inicializar
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const config = JSON.parse(saved);
+          if (config.language) setLanguage(config.language);
+          if (typeof config.textLevel === 'number') setTextLevel(config.textLevel);
+          if (typeof config.contrastActive === 'boolean') setContrastActive(config.contrastActive);
+          if (typeof config.dyslexiaFontActive === 'boolean') setDyslexiaFontActive(config.dyslexiaFontActive);
+          if (typeof config.spacingLevel === 'number') setSpacingLevel(config.spacingLevel);
+          if (typeof config.speechEnabled === 'boolean') setSpeechEnabled(config.speechEnabled);
+        }
+      } catch (error) {
+        console.warn('Error loading accessibility config:', error);
+      } finally {
+        setIsLoaded(true);
+      }
+    })();
+  }, []);
+
+  // Persistir configuración cuando cambie
+  useEffect(() => {
+    if (!isLoaded) return;
+    (async () => {
+      try {
+        const config = {
+          language,
+          textLevel,
+          contrastActive,
+          dyslexiaFontActive,
+          spacingLevel,
+          speechEnabled,
+        };
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      } catch (error) {
+        console.warn('Error saving accessibility config:', error);
+      }
+    })();
+  }, [language, textLevel, contrastActive, dyslexiaFontActive, spacingLevel, speechEnabled, isLoaded]);
 
   // Intérprete multiidioma con fallback a español
   const t = (key) => {
@@ -126,11 +92,21 @@ export const AccessibilityProvider = ({ children }) => {
   const lineHeightMultiplier = useMemo(() => {
     if (spacingLevel === 1) return 1.4;
     if (spacingLevel === 2) return 1.8;
-    return 1.2; // Base
+    return 1.2;
   }, [spacingLevel]);
 
-  // OpenDyslexic or fallback to system default
-  const globalFontFamily = dyslexiaFontActive ? 'OpenDyslexic' : undefined;
+  // Fuente amigable para dislexia por plataforma (sin dependencias externas)
+  // iOS: Verdana - ampliamente legible
+  // Android: sans-serif (default más legible que monospace)
+  // Web: 'Comic Sans MS, Verdana, sans-serif' - conocidas por mejor legibilidad
+  const globalFontFamily = dyslexiaFontActive
+    ? Platform.select({
+        ios: 'Verdana',
+        android: 'sans-serif',
+        web: 'Comic Sans MS, Verdana, sans-serif',
+        default: 'sans-serif',
+      })
+    : undefined;
   const globalLetterSpacing = dyslexiaFontActive ? 1.5 : 0;
 
   // Speech Helper with error handling
@@ -139,9 +115,11 @@ export const AccessibilityProvider = ({ children }) => {
     try {
       Speech.stop().catch(() => {});
       const lang = SPEECH_LANGUAGE_MAP[language] || 'es';
-      Speech.speak(text.toString(), { language: lang }).catch((err) => {
-        console.warn('Speech error:', err);
-      });
+      const speakOptions = { language: lang };
+      const result = Speech.speak(text.toString(), speakOptions);
+      if (result && typeof result.catch === 'function') {
+        result.catch((err) => console.warn('Speech error:', err));
+      }
     } catch (error) {
       console.error('Speech initialization failed:', error);
     }
@@ -174,7 +152,7 @@ export const AccessibilityProvider = ({ children }) => {
         isMenuOpen, setIsMenuOpen,
         resetAccessibility,
         speakText,
-        
+
         // Propiedades calculadas
         textScaleMultiplier,
         lineHeightMultiplier,

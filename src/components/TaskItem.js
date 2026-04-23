@@ -4,13 +4,16 @@
 // ============================================
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import Text from './AppText';
 import { CheckSquare, Clock, Users, AlertCircle, Pencil } from 'lucide-react-native';
 import { isOverdue, formatDate } from '../utils/dateUtils';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAccessibility } from '../contexts/AccessibilityContext';
 
 export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, isLeader }) {
   const { theme, isDark } = useTheme();
+  const { t } = useAccessibility();
   const isCompleted = task.status === 'Completada';
   const isInProgress = task.status === 'En progreso';
   const overdue = !isCompleted && isOverdue(task.dueDate);
@@ -70,7 +73,7 @@ export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, i
           <View style={[styles.assigneeBadge, { backgroundColor: theme.input, borderColor: theme.border }]}>
             <Users color={theme.textSecondary} size={12} />
             <Text style={[styles.assigneeText, { color: theme.textSecondary }]}>
-              {assigneeName || 'Sin asignar'}
+              {assigneeName || t('unassigned')}
             </Text>
           </View>
 
@@ -84,7 +87,7 @@ export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, i
                 styles.dueDateText,
                 overdue ? styles.dueDateOverdue : styles.dueDatePending
               ]}>
-                {overdue ? 'Vencida: ' : 'Vence: '}{formatDate(task.dueDate)}
+                {overdue ? t('overdue') : t('dueBy')}: {formatDate(task.dueDate)}
               </Text>
             </View>
           )}

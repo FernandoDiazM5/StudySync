@@ -7,7 +7,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Animated,
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   FlatList,
@@ -21,10 +20,12 @@ import {
   Alert,
   Vibration,
 } from "react-native";
+import Text from "../../components/AppText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Send, Star, UsersRound, MoreVertical, Pencil, Trash2, BarChart2, Shuffle, Plus, X } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useAccessibility } from "../../contexts/AccessibilityContext";
 import * as firestoreService from "../../services/firestoreService";
 import { formatTime } from "../../utils/dateUtils";
 
@@ -32,6 +33,7 @@ export default function ChatScreen({ route, navigation }) {
   const { groupId } = route.params;
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
+  const { t } = useAccessibility();
   const insets = useSafeAreaInsets();
 
   const [group, setGroup] = useState(null);
@@ -204,12 +206,12 @@ export default function ChatScreen({ route, navigation }) {
     const msg = actionMsg;
     setActionMsg(null);
     Alert.alert(
-      "Eliminar mensaje",
-      "¿Seguro que quieres eliminar este mensaje?",
+      t('deleteMessage'),
+      t('deleteMessageConfirm'),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t('cancel'), style: "cancel" },
         {
-          text: "Eliminar",
+          text: t('delete'),
           style: "destructive",
           onPress: async () => {
             try {
@@ -402,7 +404,7 @@ export default function ChatScreen({ route, navigation }) {
             {msg.rouletteTitle ? (
               <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>{msg.rouletteTitle}</Text>
             ) : (
-              <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>Ruleta de sorteo</Text>
+              <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>{t('rouletteTitle')}</Text>
             )}
             <Text style={[styles.rouletteMsgSub, { color: theme.textSecondary }]}>
               Lanzado por {getMemberName(msg.authorId)}
@@ -488,7 +490,7 @@ export default function ChatScreen({ route, navigation }) {
       >
         {!isMe && (
           <Text style={[styles.authorName, { color: theme.textSecondary }]}>
-            {authorName} {isLeader ? "(Líder)" : ""}
+            {authorName} {isLeader ? `(${t('leader')})` : ""}
           </Text>
         )}
         <TouchableOpacity
@@ -550,7 +552,7 @@ export default function ChatScreen({ route, navigation }) {
   if (!group) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: isDark ? "#111827" : "#E5E7EB" }]}>
-        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Cargando chat...</Text>
+        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>{t('loading')}</Text>
       </View>
     );
   }
@@ -572,7 +574,7 @@ export default function ChatScreen({ route, navigation }) {
             <Text style={styles.headerTitle} numberOfLines={1}>
               {group.name}
             </Text>
-            <Text style={styles.headerSubtitle}>Solo temas académicos</Text>
+            <Text style={styles.headerSubtitle}>{t('onlyAcademicTopics')}</Text>
           </View>
         </View>
         <TouchableOpacity onPress={() => setShowOnline(true)} style={{ marginLeft: 10 }}>
@@ -601,15 +603,14 @@ export default function ChatScreen({ route, navigation }) {
         ListHeaderComponent={
           <View style={styles.reminderBanner}>
             <Text style={styles.reminderText}>
-              💡 Recordatorio: Este chat es exclusivo para coordinar el trabajo
-              de <Text style={styles.reminderBold}>{group.name}</Text>.
+              💡 {t('chatReminderMsg')} <Text style={styles.reminderBold}>{group.name}</Text>.
             </Text>
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyChat}>
             <Text style={[styles.emptyChatText, { color: theme.textSecondary }]}>
-              No hay mensajes aún. ¡Sé el primero en escribir!
+              {t('chatEmpty')}
             </Text>
           </View>
         }
@@ -642,7 +643,7 @@ export default function ChatScreen({ route, navigation }) {
                 inputValueRef.current = text;
                 sendAnim.setValue(text.trim().length > 0 ? 1 : 0);
               }}
-              placeholder="Escribe un mensaje..."
+              placeholder={t('writeMessage')}
               placeholderTextColor={theme.textMuted}
               blurOnSubmit={false}
               multiline
@@ -687,16 +688,16 @@ export default function ChatScreen({ route, navigation }) {
             <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
             <TouchableOpacity style={styles.actionRow} onPress={handleStartEdit}>
               <Pencil color="#4F46E5" size={20} />
-              <Text style={[styles.actionLabel, { color: theme.text }]}>Editar mensaje</Text>
+              <Text style={[styles.actionLabel, { color: theme.text }]}>{t('edit') + ' ' + t('messages')}</Text>
             </TouchableOpacity>
             <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
             <TouchableOpacity style={styles.actionRow} onPress={handleDelete}>
               <Trash2 color="#DC2626" size={20} />
-              <Text style={[styles.actionLabel, { color: "#DC2626" }]}>Eliminar mensaje</Text>
+              <Text style={[styles.actionLabel, { color: "#DC2626" }]}>{t('deleteMessage')}</Text>
             </TouchableOpacity>
             <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
             <TouchableOpacity style={styles.actionRow} onPress={() => setActionMsg(null)}>
-              <Text style={[styles.actionCancel, { color: theme.textSecondary }]}>Cancelar</Text>
+              <Text style={[styles.actionCancel, { color: theme.textSecondary }]}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -712,7 +713,7 @@ export default function ChatScreen({ route, navigation }) {
       >
         <View style={styles.editOverlay}>
           <View style={[styles.editCard, { backgroundColor: theme.card }]}>
-            <Text style={[styles.editTitle, { color: theme.text }]}>Editar mensaje</Text>
+            <Text style={[styles.editTitle, { color: theme.text }]}>{t('edit') + ' ' + t('messages')}</Text>
             <TextInput
               style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
               value={editText}
@@ -728,14 +729,14 @@ export default function ChatScreen({ route, navigation }) {
                 onPress={() => setEditingMsg(null)}
                 disabled={editLoading}
               >
-                <Text style={[styles.editBtnCancel, { color: theme.text }]}>Cancelar</Text>
+                <Text style={[styles.editBtnCancel, { color: theme.text }]}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.editBtn, styles.editBtnSave, editLoading && { opacity: 0.6 }]}
                 onPress={handleSaveEdit}
                 disabled={editLoading}
               >
-                <Text style={styles.editBtnSaveText}>{editLoading ? "Guardando..." : "Guardar"}</Text>
+                <Text style={styles.editBtnSaveText}>{editLoading ? t('loading') : t('save')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -756,14 +757,14 @@ export default function ChatScreen({ route, navigation }) {
           onPress={() => setShowOnline(false)}
         >
           <View style={[styles.onlinePanel, { backgroundColor: theme.card }]}>
-            <Text style={[styles.onlineTitle, { color: "#4F46E5", borderBottomColor: theme.border }]}>Miembros del grupo</Text>
+            <Text style={[styles.onlineTitle, { color: "#4F46E5", borderBottomColor: theme.border }]}>{t('groupMembers')}</Text>
 
             {/* Conectados */}
             <Text style={styles.onlineSectionLabel}>
-              🟢 Conectados ({onlineMembers.length})
+              🟢 {t('online')} ({onlineMembers.length})
             </Text>
             {onlineMembers.length === 0 ? (
-              <Text style={styles.onlineEmpty}>Nadie conectado</Text>
+              <Text style={styles.onlineEmpty}>{t('online')} - {t('noMessages')}</Text>
             ) : (
               onlineMembers.map((m) => (
                 <View key={m.id} style={styles.onlineMemberRow}>
@@ -771,7 +772,7 @@ export default function ChatScreen({ route, navigation }) {
                   <Text style={[styles.onlineMemberName, { color: theme.text }]}>{m.name}</Text>
                   {m.id === group?.leaderId && (
                     <View style={styles.onlineLeaderBadge}>
-                      <Text style={styles.onlineLeaderText}>Líder</Text>
+                      <Text style={styles.onlineLeaderText}>{t('leader')}</Text>
                     </View>
                   )}
                 </View>
@@ -787,10 +788,10 @@ export default function ChatScreen({ route, navigation }) {
               return (
                 <>
                   <Text style={styles.offlineSectionLabel}>
-                    ⚫ Desconectados ({offline.length})
+                    ⚫ {t('disconnected')} ({offline.length})
                   </Text>
                   {offline.length === 0 ? (
-                    <Text style={styles.onlineEmpty}>Todos conectados</Text>
+                    <Text style={styles.onlineEmpty}>{t('allConnected')}</Text>
                   ) : (
                     offline.map((m) => (
                       <View key={m.id} style={styles.onlineMemberRow}>
@@ -798,7 +799,7 @@ export default function ChatScreen({ route, navigation }) {
                         <Text style={[styles.offlineMemberName, { color: theme.textMuted }]}>{m.name}</Text>
                         {m.id === group?.leaderId && (
                           <View style={styles.onlineLeaderBadge}>
-                            <Text style={styles.onlineLeaderText}>Líder</Text>
+                            <Text style={styles.onlineLeaderText}>{t('leader')}</Text>
                           </View>
                         )}
                       </View>
@@ -818,16 +819,16 @@ export default function ChatScreen({ route, navigation }) {
             <View style={[styles.actionHandle, { backgroundColor: theme.border }]} />
             <TouchableOpacity style={styles.actionRow} onPress={() => { setShowExtraMenu(false); setShowPollModal(true); }}>
               <BarChart2 color="#6366F1" size={22} />
-              <Text style={[styles.actionLabel, { color: theme.text }]}>Crear encuesta</Text>
+              <Text style={[styles.actionLabel, { color: theme.text }]}>{t('createPoll')}</Text>
             </TouchableOpacity>
             <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
             <TouchableOpacity style={styles.actionRow} onPress={() => { setShowExtraMenu(false); setRouletteTitle(""); setRouletteItems(["", ""]); setRouletteResult(null); setRouletteCurrent(""); setShowRouletteModal(true); }}>
               <Shuffle color="#6366F1" size={22} />
-              <Text style={[styles.actionLabel, { color: theme.text }]}>Ruleta de sorteo</Text>
+              <Text style={[styles.actionLabel, { color: theme.text }]}>{t('rouletteTitle')}</Text>
             </TouchableOpacity>
             <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
             <TouchableOpacity style={styles.actionRow} onPress={() => setShowExtraMenu(false)}>
-              <Text style={[styles.actionCancel, { color: theme.textSecondary }]}>Cancelar</Text>
+              <Text style={[styles.actionCancel, { color: theme.textSecondary }]}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -839,14 +840,14 @@ export default function ChatScreen({ route, navigation }) {
           <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "80%" }]}>
             <View style={styles.modalTitleRow}>
               <BarChart2 color="#6366F1" size={18} />
-              <Text style={[styles.editTitle, { color: theme.text }]}>Nueva encuesta</Text>
+              <Text style={[styles.editTitle, { color: theme.text }]}>{t('newPoll')}</Text>
               <TouchableOpacity onPress={() => setShowPollModal(false)}>
                 <X color={theme.textMuted} size={20} />
               </TouchableOpacity>
             </View>
             <TextInput
               style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-              placeholder="¿Cuál es la pregunta?"
+              placeholder={t('pollQuestion')}
               placeholderTextColor={theme.textMuted}
               value={pollQuestion}
               onChangeText={setPollQuestion}
@@ -856,7 +857,7 @@ export default function ChatScreen({ route, navigation }) {
               <View key={i} style={styles.pollOptionRow}>
                 <TextInput
                   style={[styles.pollOptionInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                  placeholder={`Opción ${i + 1}`}
+                  placeholder={i === 0 ? t('option1') : i === 1 ? t('option2') : `${i + 1}`}
                   placeholderTextColor={theme.textMuted}
                   value={opt}
                   onChangeText={(t) => { const arr = [...pollOptions]; arr[i] = t; setPollOptions(arr); }}
@@ -872,19 +873,19 @@ export default function ChatScreen({ route, navigation }) {
             {pollOptions.length < 6 && (
               <TouchableOpacity style={[styles.addOptionBtn, { borderColor: theme.border }]} onPress={() => setPollOptions([...pollOptions, ""])}>
                 <Plus color="#6366F1" size={16} />
-                <Text style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}>Agregar opción</Text>
+                <Text style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}>{t('addOption')}</Text>
               </TouchableOpacity>
             )}
             <View style={styles.editActions}>
               <TouchableOpacity style={[styles.editBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]} onPress={() => setShowPollModal(false)}>
-                <Text style={[styles.editBtnCancel, { color: theme.text }]}>Cancelar</Text>
+                <Text style={[styles.editBtnCancel, { color: theme.text }]}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.editBtn, styles.editBtnSave, (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) && { opacity: 0.5 }]}
                 onPress={handleSendPoll}
                 disabled={!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2}
               >
-                <Text style={styles.editBtnSaveText}>Publicar</Text>
+                <Text style={styles.editBtnSaveText}>{t('send')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -898,7 +899,7 @@ export default function ChatScreen({ route, navigation }) {
             {/* Header */}
             <View style={styles.modalTitleRow}>
               <Shuffle color="#6366F1" size={18} />
-              <Text style={[styles.editTitle, { color: theme.text }]}>Ruleta de sorteo</Text>
+              <Text style={[styles.editTitle, { color: theme.text }]}>{t('rouletteTitle')}</Text>
               <TouchableOpacity onPress={() => { if (!rouletteSpinning) setShowRouletteModal(false); }}>
                 <X color={theme.textMuted} size={20} />
               </TouchableOpacity>
@@ -908,7 +909,7 @@ export default function ChatScreen({ route, navigation }) {
               {/* Título del sorteo */}
               <TextInput
                 style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                placeholder="Título del sorteo (ej. ¿Quién expone?)"
+                placeholder={t('rouletteTitle')}
                 placeholderTextColor={theme.textMuted}
                 value={rouletteTitle}
                 onChangeText={setRouletteTitle}
@@ -919,7 +920,7 @@ export default function ChatScreen({ route, navigation }) {
               {/* Chips de miembros */}
               {members.length > 0 && (
                 <View style={styles.memberChipsSection}>
-                  <Text style={[styles.memberChipsLabel, { color: theme.textSecondary }]}>Agregar miembros:</Text>
+                  <Text style={[styles.memberChipsLabel, { color: theme.textSecondary }]}>{t('addMembers')}</Text>
                   <View style={styles.memberChipsRow}>
                     {members.map((m) => {
                       const selected = rouletteItems.includes(m.name);
@@ -953,12 +954,12 @@ export default function ChatScreen({ route, navigation }) {
 
               {/* Lista manual de elementos */}
               <View style={styles.rouletteItemsSection}>
-                <Text style={[styles.memberChipsLabel, { color: theme.textSecondary }]}>Opciones del sorteo:</Text>
+                <Text style={[styles.memberChipsLabel, { color: theme.textSecondary }]}>{t('rouletteOptions')}</Text>
                 {rouletteItems.map((item, i) => (
                   <View key={i} style={styles.pollOptionRow}>
                     <TextInput
                       style={[styles.pollOptionInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                      placeholder={`Elemento ${i + 1}`}
+                      placeholder={i === 0 ? t('element1') : i === 1 ? t('element2') : `${i + 1}`}
                       placeholderTextColor={theme.textMuted}
                       value={item}
                       onChangeText={(t) => { const arr = [...rouletteItems]; arr[i] = t; setRouletteItems(arr); }}
@@ -975,7 +976,7 @@ export default function ChatScreen({ route, navigation }) {
                 {rouletteItems.length < 10 && (
                   <TouchableOpacity style={[styles.addOptionBtn, { borderColor: theme.border }]} onPress={() => setRouletteItems([...rouletteItems, ""])} disabled={rouletteSpinning}>
                     <Plus color="#6366F1" size={16} />
-                    <Text style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}>Agregar elemento</Text>
+                    <Text style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}>{t('addElement')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -983,7 +984,7 @@ export default function ChatScreen({ route, navigation }) {
 
             {rouletteResult && (
               <View style={[styles.rouletteWinnerBanner, { backgroundColor: isDark ? "#312E81" : "#EDE9FE" }]}>
-                <Text style={[styles.rouletteWinnerBannerLabel, { color: isDark ? "#A5B4FC" : "#6D28D9" }]}>🏆 Ganador</Text>
+                <Text style={[styles.rouletteWinnerBannerLabel, { color: isDark ? "#A5B4FC" : "#6D28D9" }]}>🏆 {t('winner')}</Text>
                 <Text style={[styles.rouletteWinnerBannerName, { color: isDark ? "#E0E7FF" : "#4C1D95" }]} numberOfLines={1}>{rouletteResult}</Text>
               </View>
             )}
@@ -992,10 +993,10 @@ export default function ChatScreen({ route, navigation }) {
               {rouletteResult ? (
                 <>
                   <TouchableOpacity style={[styles.editBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]} onPress={() => { setRouletteResult(null); setRouletteCurrent(""); }}>
-                    <Text style={[styles.editBtnCancel, { color: theme.text }]}>Volver a girar</Text>
+                    <Text style={[styles.editBtnCancel, { color: theme.text }]}>{t('spinAgain')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.editBtn, styles.editBtnSave]} onPress={handleSendRouletteResult}>
-                    <Text style={styles.editBtnSaveText}>Enviar al chat</Text>
+                    <Text style={styles.editBtnSaveText}>{t('sendToChat')}</Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -1004,7 +1005,7 @@ export default function ChatScreen({ route, navigation }) {
                   onPress={handleSpin}
                   disabled={rouletteSpinning || rouletteItems.filter(i => i.trim()).length < 2}
                 >
-                  <Text style={styles.editBtnSaveText}>{rouletteSpinning ? "Girando..." : "🎡 Girar"}</Text>
+                  <Text style={styles.editBtnSaveText}>{rouletteSpinning ? t('spinning') : "🎡 Girar"}</Text>
                 </TouchableOpacity>
               )}
             </View>

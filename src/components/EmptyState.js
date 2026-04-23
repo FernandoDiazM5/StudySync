@@ -4,7 +4,8 @@
 // ============================================
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import Text from './AppText';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function EmptyState({ icon: Icon, title, message, actionText, onAction }) {

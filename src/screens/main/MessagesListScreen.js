@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from "react";
 import {
   View,
-  Text,
   TouchableOpacity,
   FlatList,
   StyleSheet,
   StatusBar,
 } from "react-native";
+import Text from "../../components/AppText";
+import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { UsersRound } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
@@ -17,6 +18,7 @@ import * as firestoreService from "../../services/firestoreService";
 export default function MessagesListScreen({ navigation }) {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { t } = useAccessibility();
   const insets = useSafeAreaInsets();
   const [groups, setGroups] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
@@ -95,7 +97,7 @@ export default function MessagesListScreen({ navigation }) {
               style={[s.lastMsg, { color: theme.textSecondary }, isUnread && s.lastMsgUnread]}
               numberOfLines={1}
             >
-              {lastMsg ? lastMsg.text : "No hay mensajes aún"}
+              {lastMsg ? lastMsg.text : t('noMessagesYet')}
             </Text>
           </View>
           <View style={s.rightSection}>
@@ -119,7 +121,7 @@ export default function MessagesListScreen({ navigation }) {
     <View style={[s.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
       <View style={[s.header, { backgroundColor: theme.headerBg }]}>
-        <Text style={s.headerTitle}>Mensajes</Text>
+        <Text style={s.headerTitle}>{t('messages')}</Text>
       </View>
       <FlatList
         data={groups}
@@ -129,7 +131,7 @@ export default function MessagesListScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={s.empty}>
-            <Text style={[s.emptyText, { color: theme.textSecondary }]}>No perteneces a ningún grupo aún.</Text>
+            <Text style={[s.emptyText, { color: theme.textSecondary }]}>{t('noGroupsYet')}</Text>
           </View>
         }
       />

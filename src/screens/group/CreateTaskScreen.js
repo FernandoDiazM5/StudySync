@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -12,6 +11,8 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
+import Text from "../../components/AppText";
+import { useAccessibility } from "../../contexts/AccessibilityContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Check, Calendar } from "lucide-react-native";
@@ -24,6 +25,7 @@ export default function CreateTaskScreen({ route, navigation }) {
   const isEditing = !!task;
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
+  const { t } = useAccessibility();
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState(task?.title || "");
   const [desc, setDesc] = useState(task?.description || "");
@@ -60,15 +62,15 @@ export default function CreateTaskScreen({ route, navigation }) {
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      Alert.alert("Error", "El título es obligatorio.");
+      Alert.alert(t('error'), t('taskTitleRequired'));
       return;
     }
     if (!assigneeId) {
-      Alert.alert("Error", "Debes asignar la tarea a un miembro.");
+      Alert.alert(t('error'), t('taskAssignRequired'));
       return;
     }
     if (dueDate && !/^\d{2}-\d{2}-\d{4}$/.test(dueDate)) {
-      Alert.alert("Error", "La fecha debe tener el formato DD-MM-YYYY.");
+      Alert.alert(t('error'), t('taskDateFormat'));
       return;
     }
     setLoading(true);
@@ -80,7 +82,7 @@ export default function CreateTaskScreen({ route, navigation }) {
           assigneeId,
           dueDate: toISO(dueDate) || "Sin fecha",
         });
-        Alert.alert("Éxito", "Tarea actualizada", [
+        Alert.alert(t('success'), t('taskUpdated'), [
           { text: "OK", onPress: () => navigation.goBack() },
         ]);
       } else {
@@ -93,12 +95,12 @@ export default function CreateTaskScreen({ route, navigation }) {
           status: "Pendiente",
           createdBy: user.uid,
         });
-        Alert.alert("Éxito", "Tarea creada", [
+        Alert.alert(t('success'), t('taskCreatedMsg'), [
           { text: "OK", onPress: () => navigation.goBack() },
         ]);
       }
     } catch (e) {
-      Alert.alert("Error", e?.message || "No se pudo guardar la tarea.");
+      Alert.alert(t('error'), e?.message || t('operationError'));
     }
     setLoading(false);
   };
@@ -111,7 +113,7 @@ export default function CreateTaskScreen({ route, navigation }) {
           <ChevronLeft color={theme.textSecondary} size={24} />
         </TouchableOpacity>
         <Text style={[s.headerTitle, { color: theme.text }]}>
-          {isEditing ? "Editar Tarea" : "Nueva Tarea"}
+          {isEditing ? t('edit') + ' ' + t('tasks') : t('newTask')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -124,20 +126,20 @@ export default function CreateTaskScreen({ route, navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         <View>
-          <Text style={[s.label, { color: theme.textSecondary }]}>TÍTULO DE LA TAREA</Text>
+          <Text style={[s.label, { color: theme.textSecondary }]}>{t('taskTitle').toUpperCase()}</Text>
           <TextInput
             style={[s.input, { backgroundColor: theme.card, borderColor: theme.inputBorder, color: theme.text }]}
-            placeholder="Ej: Marco teórico"
+            placeholder={t('exampleTaskTitle')}
             placeholderTextColor={theme.textMuted}
             value={title}
             onChangeText={setTitle}
           />
         </View>
         <View>
-          <Text style={[s.label, { color: theme.textSecondary }]}>DESCRIPCIÓN (OPCIONAL)</Text>
+          <Text style={[s.label, { color: theme.textSecondary }]}>{t('taskDescription').toUpperCase()} (OPCIONAL)</Text>
           <TextInput
             style={[s.input, { minHeight: 80, textAlignVertical: "top", backgroundColor: theme.card, borderColor: theme.inputBorder, color: theme.text }]}
-            placeholder="Describe la tarea..."
+            placeholder={t('exampleTaskDesc')}
             placeholderTextColor={theme.textMuted}
             value={desc}
             onChangeText={setDesc}
@@ -145,9 +147,9 @@ export default function CreateTaskScreen({ route, navigation }) {
           />
         </View>
         <View>
-          <Text style={[s.label, { color: theme.textSecondary }]}>ASIGNAR A</Text>
+          <Text style={[s.label, { color: theme.textSecondary }]}>{t('assignTo').toUpperCase()}</Text>
           {members.length === 0 ? (
-            <Text style={[s.hint, { color: theme.textMuted }]}>No hay miembros en este grupo.</Text>
+            <Text style={[s.hint, { color: theme.textMuted }]}>{t('noMembersYet')}</Text>
           ) : (
             <View style={s.memberList}>
               {members.map((m) => {
@@ -176,7 +178,7 @@ export default function CreateTaskScreen({ route, navigation }) {
           )}
         </View>
         <View>
-          <Text style={[s.label, { color: theme.textSecondary }]}>FECHA LÍMITE</Text>
+          <Text style={[s.label, { color: theme.textSecondary }]}>{t('dueDate').toUpperCase()}</Text>
           <View style={s.dateRow}>
             <TextInput
               style={[s.input, { flex: 1, backgroundColor: theme.card, borderColor: theme.inputBorder, color: theme.text }]}
@@ -229,7 +231,7 @@ export default function CreateTaskScreen({ route, navigation }) {
             <ActivityIndicator color="#FFF" />
           ) : (
             <Text style={s.btnText}>
-              {isEditing ? "Guardar Cambios" : "Crear Tarea"}
+              {isEditing ? t('saveChanges') : t('createTask')}
             </Text>
           )}
         </TouchableOpacity>
