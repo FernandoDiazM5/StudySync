@@ -309,6 +309,20 @@ export const TRANSLATIONS = {
     exampleName: 'Ej. Carlos Mendoza',
     exampleEmail: 'tu@uni.edu',
     examplePhone: 'Ej. 999 999 999',
+
+    // ===== FILE STORAGE =====
+    downloadFile: 'Descargar archivo',
+    deleteFile: 'Eliminar archivo',
+    fileSize: 'Tamaño del archivo',
+    uploadError: 'Error al subir archivo',
+    deleteFileConfirm: '¿Eliminar este archivo?',
+    selectFile: 'Seleccionar archivo',
+    noFileSelected: 'No hay archivo seleccionado',
+    fileUploaded: 'Archivo subido correctamente',
+    fileDeleted: 'Archivo eliminado',
+    groupFiles: 'Archivos del grupo',
+    sharedFiles: 'Archivos compartidos',
+    uploadedBy: 'Subido por',
   },
 
   en: {
@@ -618,6 +632,20 @@ export const TRANSLATIONS = {
     exampleName: 'E.g. Carlos Mendoza',
     exampleEmail: 'your@uni.edu',
     examplePhone: 'E.g. 999 999 999',
+
+    // ===== FILE STORAGE =====
+    downloadFile: 'Download file',
+    deleteFile: 'Delete file',
+    fileSize: 'File size',
+    uploadError: 'Error uploading file',
+    deleteFileConfirm: 'Delete this file?',
+    selectFile: 'Select file',
+    noFileSelected: 'No file selected',
+    fileUploaded: 'File uploaded successfully',
+    fileDeleted: 'File deleted',
+    groupFiles: 'Group files',
+    sharedFiles: 'Shared files',
+    uploadedBy: 'Uploaded by',
   },
 
   qu: {
@@ -813,5 +841,9 @@ export const TRANSLATIONS = {
     editGroup: 'Ayllu allichay',
     uploadSuccess: '¡Qillqa subisqa!',
     inviteMemberTitle: 'Runa wañuchay',
+    downloadFile: 'Qillqa aqiy',
+    deleteFile: 'Qillqa qichuy',
+    fileSize: 'Qillqa hatun',
+    uploadError: 'Panatasqa archivo subiy',
   },
 };

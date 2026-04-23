@@ -557,3 +557,37 @@ export const addFileRecord = async (fileData) => {
   });
   return docRef.id;
 };
+
+/**
+ * Agregar archivo a un grupo
+ * Guarda metadatos en Firestore, la URL pública viene de Supabase Storage
+ */
+export const addGroupFile = async (fileData) => {
+  try {
+    const docRef = await addDoc(
+      collection(db, 'files'),
+      {
+        ...fileData,
+        uploadedAt: new Date(),
+      }
+    );
+    return { id: docRef.id, ...fileData };
+  } catch (error) {
+    console.error('Error adding group file:', error);
+    throw error;
+  }
+};
+
+/**
+ * Eliminar archivo de un grupo
+ * Solo elimina el registro en Firestore, Supabase Storage se elimina por separado
+ */
+export const deleteGroupFile = async (groupId, fileId) => {
+  try {
+    await deleteDoc(doc(db, 'files', fileId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting group file:', error);
+    throw error;
+  }
+};

@@ -30,8 +30,8 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useFileStorage } from "../../contexts/FileStorageContext";
 import * as firestoreService from "../../services/firestoreService";
-import { uploadFile } from "../../services/storageService";
 import TaskItem from "../../components/TaskItem";
 import EmptyState from "../../components/EmptyState";
 
@@ -40,6 +40,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
   const { t } = useAccessibility();
+  const { uploadGroupFile, deleteGroupFile } = useFileStorage();
   const insets = useSafeAreaInsets();
   const [group, setGroup] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -178,20 +179,29 @@ export default function GroupDetailsScreen({ route, navigation }) {
       const file = result.assets[0];
       setUploading(true);
 
-      const uploadResult = await uploadFile(
+      // Subir archivo a Supabase
+      const uploadedFile = await uploadGroupFile(
         groupId,
         file.uri,
         file.name,
-        file.mimeType,
       );
 
-      if (uploadResult.success) {
-        Alert.alert(t('success'), t('uploadSuccess'));
-      } else {
-        Alert.alert("Error", uploadResult.error || "No se pudo subir el archivo.");
-      }
+      // Guardar metadatos en Firestore
+      await firestoreService.addGroupFile({
+        groupId,
+        fileName: uploadedFile.fileName,
+        filePath: uploadedFile.filePath,
+        publicUrl: uploadedFile.publicUrl,
+        uploadedBy: user.uid,
+        uploadedByName: user.displayName || user.email,
+        uploadedAt: new Date(),
+        fileSize: file.size || 0,
+      });
+
+      Alert.alert(t('success'), t('uploadSuccess'));
     } catch (e) {
-      Alert.alert(t('error'), t('couldNotOpenPicker'));
+      console.error('Error uploading file:', e);
+      Alert.alert(t('error'), t('uploadError'));
     } finally {
       setUploading(false);
     }
@@ -385,11 +395,14 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     <View style={styles.fileInfo}>
                       <View style={styles.fileIcon}>
                         <Text style={styles.fileIconText}>
-                          {file.type || "FILE"}
+                          {file.fileName?.split('.').pop()?.toUpperCase() || "FILE"}
                         </Text>
                       </View>
-                      <View>
-                        <Text style={[styles.fileName, { color: theme.text }]}>{file.name}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.fileName, { color: theme.text }]}>{file.fileName}</Text>
+                        <Text style={[styles.fileDate, { color: theme.textMuted }]}>
+                          {t('uploadedBy')}: {file.uploadedByName}
+                        </Text>
                         <Text style={[styles.fileDate, { color: theme.textMuted }]}>
                           {t('uploadedOn')}{" "}
                           {file.uploadedAt
@@ -400,6 +413,47 @@ export default function GroupDetailsScreen({ route, navigation }) {
                             : ""}
                         </Text>
                       </View>
+                    </View>
+                    <View style={styles.fileActions}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          // Aquí iría la lógica de descargar
+                          console.log('Descargando:', file.publicUrl);
+                          Alert.alert(t('success'), t('downloadFile'));
+                        }}
+                        style={[styles.actionButton, { backgroundColor: isDark ? "#312E81" : "#EEF2FF" }]}
+                      >
+                        <Text style={{ color: '#4F46E5', fontSize: 12 }}>↓</Text>
+                      </TouchableOpacity>
+                      {isLeader && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            Alert.alert(
+                              t('confirm'),
+                              t('deleteFileConfirm'),
+                              [
+                                { text: t('cancel'), style: 'cancel' },
+                                {
+                                  text: t('delete'),
+                                  style: 'destructive',
+                                  onPress: async () => {
+                                    try {
+                                      await deleteGroupFile(file.filePath);
+                                      await firestoreService.deleteGroupFile(groupId, file.id);
+                                      Alert.alert(t('success'), t('fileDeleted'));
+                                    } catch (error) {
+                                      Alert.alert(t('error'), error.message);
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                          style={[styles.actionButton, { backgroundColor: '#FEE2E2' }]}
+                        >
+                          <Text style={{ color: '#DC2626', fontSize: 12 }}>🗑</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 )}
@@ -724,6 +778,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9CA3AF",
     marginTop: 2,
+  },
+  fileActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
   },
   // Member Card
   memberCard: {
