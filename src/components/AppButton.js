@@ -15,16 +15,8 @@ export const extractString = (node) => {
 export default function AppButton({ children, overrideText, accessibilityLabel, ...props }) {
   const accessibility = useAccessibility();
 
-  // Cleanup: Stop speech when component unmounts
-  useEffect(() => {
-    return () => {
-      try {
-        Speech.stop().catch(() => {});
-      } catch (error) {
-        console.warn('Error stopping speech on unmount:', error);
-      }
-    };
-  }, []);
+  // No detenemos el speech al desmontar: múltiples AppButton
+  // llamando a Speech.stop() al desmontarse cancelan la narración activa.
 
   const handleLongPress = (event) => {
     if (accessibility && accessibility.speechEnabled) {

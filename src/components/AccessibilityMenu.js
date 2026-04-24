@@ -193,7 +193,18 @@ export default function AccessibilityMenu() {
                 onPress={() => {
                   const newState = !speechEnabled;
                   setSpeechEnabled(newState);
-                  if (!newState) {
+                  if (newState) {
+                    // Feedback inmediato al activar el narrador
+                    try {
+                      const lang = language === 'en' ? 'en' : 'es';
+                      const msg = language === 'en'
+                        ? 'Narrator enabled. Long press any text to hear it.'
+                        : 'Narrador activado. Mantén presionado cualquier texto para escucharlo.';
+                      Speech.speak(msg, { language: lang });
+                    } catch (e) {
+                      console.warn('Speech error on enable:', e);
+                    }
+                  } else {
                     try {
                       Speech.stop().catch(() => {});
                     } catch (error) {

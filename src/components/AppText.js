@@ -8,16 +8,8 @@ import { useAccessibility } from '../contexts/AccessibilityContext';
 export default function AppText({ style, children, ...props }) {
   const accessibility = useAccessibility();
 
-  // Cleanup: Stop speech when component unmounts
-  useEffect(() => {
-    return () => {
-      try {
-        Speech.stop().catch(() => {});
-      } catch (error) {
-        console.warn('Error stopping speech on unmount:', error);
-      }
-    };
-  }, []);
+  // No detenemos el speech al desmontar: múltiples AppText
+  // llamando a Speech.stop() al desmontarse cancelan la narración activa.
 
   // Safety check if used without AccessibilityProvider
   if (!accessibility) {

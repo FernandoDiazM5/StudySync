@@ -11,31 +11,42 @@ export const FileStorageProvider = ({ children }) => {
    * @param {string} fileName - Nombre del archivo
    * @returns {Promise<{filePath, publicUrl, fileName}>}
    */
-  const uploadGroupFile = async (groupId, fileUri, fileName) => {
+  const uploadGroupFile = async (groupId, fileUri, fileName, mimeType) => {
     try {
-      console.log(`Subiendo archivo: ${fileName} al grupo: ${groupId}`);
+      console.log(`[FileStorage] Subiendo: ${fileName} → grupo: ${groupId}`);
+      console.log(`[FileStorage] URI: ${fileUri}`);
 
-      // 1. Leer archivo desde device
-      const response = await fetch(fileUri);
-      const blob = await response.blob();
-
-      // 2. Crear ruta única
+      // 1. Crear ruta única dentro del bucket
       const timestamp = Date.now();
-      const filePath = `${groupId}/${timestamp}_${fileName}`;
+      const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `${groupId}/${timestamp}_${safeName}`;
+      const contentType = mimeType || 'application/octet-stream';
 
-      console.log(`Ruta de archivo: ${filePath}`);
+      console.log(`[FileStorage] Ruta destino: ${filePath}`);
 
-      // 3. Subir a Supabase Storage
+      // 2. Leer el contenido del archivo como ArrayBuffer
+      //    Funciona tanto con blob: (Expo Web) como con file:// (nativo)
+      const response = await fetch(fileUri);
+      if (!response.ok) {
+        throw new Error(`No se pudo leer el archivo (status ${response.status})`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      console.log(`[FileStorage] Tamaño leído: ${arrayBuffer.byteLength} bytes`);
+
+      // 3. Subir ArrayBuffer a Supabase Storage
       const { data, error } = await supabase.storage
         .from('group-files')
-        .upload(filePath, blob);
+        .upload(filePath, arrayBuffer, {
+          contentType,
+          upsert: false,
+        });
 
       if (error) {
-        console.error('Error de Supabase:', error);
+        console.error('[FileStorage] Error Supabase:', JSON.stringify(error));
         throw new Error(`Error al subir archivo: ${error.message}`);
       }
 
-      console.log('Archivo subido exitosamente');
+      console.log('[FileStorage] Archivo subido OK:', data);
 
       // 4. Obtener URL pública
       const { data: publicData } = supabase.storage
@@ -45,11 +56,11 @@ export const FileStorageProvider = ({ children }) => {
       return {
         filePath,
         publicUrl: publicData.publicUrl,
-        fileName: fileName,
+        fileName: safeName,
         uploadedAt: new Date().toISOString(),
       };
     } catch (error) {
-      console.error('Error en uploadGroupFile:', error);
+      console.error('[FileStorage] Error en uploadGroupFile:', error);
       throw error;
     }
   };

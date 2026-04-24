@@ -14,6 +14,7 @@ import {
   Alert,
   StatusBar,
   Modal,
+  Linking,
 } from "react-native";
 import Text from "../../components/AppText";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
@@ -184,6 +185,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
         groupId,
         file.uri,
         file.name,
+        file.mimeType || 'application/octet-stream',
       );
 
       // Guardar metadatos en Firestore
@@ -416,10 +418,21 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     </View>
                     <View style={styles.fileActions}>
                       <TouchableOpacity
-                        onPress={() => {
-                          // Aquí iría la lógica de descargar
-                          console.log('Descargando:', file.publicUrl);
-                          Alert.alert(t('success'), t('downloadFile'));
+                        onPress={async () => {
+                          try {
+                            if (!file.publicUrl) {
+                              Alert.alert(t('error'), 'URL no disponible');
+                              return;
+                            }
+                            const supported = await Linking.canOpenURL(file.publicUrl);
+                            if (supported) {
+                              await Linking.openURL(file.publicUrl);
+                            } else {
+                              Alert.alert(t('error'), 'No se puede abrir este archivo');
+                            }
+                          } catch (err) {
+                            Alert.alert(t('error'), 'No se pudo abrir el archivo');
+                          }
                         }}
                         style={[styles.actionButton, { backgroundColor: isDark ? "#312E81" : "#EEF2FF" }]}
                       >
