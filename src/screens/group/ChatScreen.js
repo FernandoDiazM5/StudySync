@@ -21,6 +21,7 @@ import {
   Vibration,
 } from "react-native";
 import Text from "../../components/AppText";
+import GroupAvatar from "../../components/GroupAvatar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Send, Star, UsersRound, MoreVertical, Pencil, Trash2, BarChart2, Shuffle, Plus, X } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
@@ -570,6 +571,13 @@ export default function ChatScreen({ route, navigation }) {
           >
             <ChevronLeft color="#FFFFFF" size={24} />
           </TouchableOpacity>
+          <GroupAvatar
+            photoURL={group.photoURL}
+            name={group.name}
+            size={36}
+            borderRadius={10}
+            style={{ marginRight: 8 }}
+          />
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle} numberOfLines={1}>
               {group.name}

@@ -8,9 +8,9 @@ import {
   StatusBar,
 } from "react-native";
 import Text from "../../components/AppText";
+import GroupAvatar from "../../components/GroupAvatar";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { UsersRound } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import * as firestoreService from "../../services/firestoreService";
@@ -84,9 +84,13 @@ export default function MessagesListScreen({ navigation }) {
       >
         <View style={s.row}>
           <View style={s.leftSection}>
-            <View style={[s.avatar, isUnread && s.avatarUnread]}>
-              <UsersRound size={22} color={isUnread ? "#FFF" : "#4F46E5"} />
-            </View>
+            <GroupAvatar
+              photoURL={group.photoURL}
+              name={group.name}
+              size={44}
+              showInitials={true}
+              style={isUnread ? { borderWidth: 2, borderColor: '#4F46E5' } : undefined}
+            />
             {isUnread && <View style={s.unreadDot} />}
           </View>
           <View style={s.textSection}>

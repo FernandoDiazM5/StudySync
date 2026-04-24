@@ -15,6 +15,8 @@ import {
   StatusBar,
   Modal,
   Linking,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import Text from "../../components/AppText";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
@@ -35,13 +37,14 @@ import { useFileStorage } from "../../contexts/FileStorageContext";
 import * as firestoreService from "../../services/firestoreService";
 import TaskItem from "../../components/TaskItem";
 import EmptyState from "../../components/EmptyState";
+import GroupAvatar from "../../components/GroupAvatar";
 
 export default function GroupDetailsScreen({ route, navigation }) {
   const { groupId } = route.params;
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
   const { t } = useAccessibility();
-  const { uploadGroupFile, deleteGroupFile } = useFileStorage();
+  const { uploadGroupFile, uploadGroupAvatar, deleteGroupFile } = useFileStorage();
   const insets = useSafeAreaInsets();
   const [group, setGroup] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -56,6 +59,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editPhotoUrl, setEditPhotoUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -155,6 +160,27 @@ export default function GroupDetailsScreen({ route, navigation }) {
 
   const isLeader = group?.leaderId === user?.uid;
 
+  // Convierte Firestore Timestamp, Date o string a fecha legible
+  const formatUploadDate = (uploadedAt) => {
+    if (!uploadedAt) return '';
+    try {
+      let date;
+      if (uploadedAt?.toDate) {
+        date = uploadedAt.toDate(); // Firestore Timestamp
+      } else if (uploadedAt instanceof Date) {
+        date = uploadedAt;
+      } else {
+        date = new Date(uploadedAt);
+      }
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleDateString('es-ES', {
+        day: '2-digit', month: '2-digit', year: '2-digit'
+      });
+    } catch {
+      return '';
+    }
+  };
+
   const handleToggleTaskStatus = async (taskId, currentStatus) => {
     let nextStatus = "Pendiente";
     if (currentStatus === "Pendiente") nextStatus = "En progreso";
@@ -230,7 +256,26 @@ export default function GroupDetailsScreen({ route, navigation }) {
   const handleOpenEditModal = () => {
     setEditName(group.name || "");
     setEditDescription(group.description || "");
+    setEditPhotoUrl(group.photoURL || "");
     setEditModalVisible(true);
+  };
+
+  const handlePickGroupPhoto = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      setUploadingPhoto(true);
+      const url = await uploadGroupAvatar(groupId, file.uri, file.mimeType || 'image/jpeg');
+      setEditPhotoUrl(url);
+    } catch (e) {
+      Alert.alert(t('error'), 'No se pudo cambiar la foto del grupo');
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const handleSaveGroup = async () => {
@@ -243,8 +288,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
       await firestoreService.updateGroup(groupId, {
         name: editName.trim(),
         description: editDescription.trim(),
+        photoURL: editPhotoUrl || null,
       });
-      setGroup((prev) => ({ ...prev, name: editName.trim(), description: editDescription.trim() }));
+      setGroup((prev) => ({ ...prev, name: editName.trim(), description: editDescription.trim(), photoURL: editPhotoUrl || null }));
       setEditModalVisible(false);
       Alert.alert(t('success'), t('groupUpdated'));
     } catch (e) {
@@ -287,6 +333,12 @@ export default function GroupDetailsScreen({ route, navigation }) {
         >
           <ChevronLeft color={theme.textSecondary} size={24} />
         </TouchableOpacity>
+        <GroupAvatar
+          photoURL={group.photoURL}
+          name={group.name}
+          size={38}
+          borderRadius={10}
+        />
         <View style={styles.headerInfo}>
           <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">{group.name}</Text>
           <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
@@ -411,22 +463,26 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     <View style={styles.fileInfo}>
                       <View style={styles.fileIcon}>
                         <Text style={styles.fileIconText}>
-                          {file.fileName?.split('.').pop()?.toUpperCase() || "FILE"}
+                          {(file.fileName?.split('.').pop()?.toUpperCase() || "FILE").slice(0, 4)}
                         </Text>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.fileName, { color: theme.text }]}>{file.fileName}</Text>
-                        <Text style={[styles.fileDate, { color: theme.textMuted }]}>
-                          {t('uploadedBy')}: {file.uploadedByName}
+                      <View style={styles.fileTextBlock}>
+                        <Text
+                          style={[styles.fileName, { color: theme.text }]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {file.fileName}
+                        </Text>
+                        <Text
+                          style={[styles.fileDate, { color: theme.textMuted }]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {file.uploadedByName || file.uploadedBy}
                         </Text>
                         <Text style={[styles.fileDate, { color: theme.textMuted }]}>
-                          {t('uploadedOn')}{" "}
-                          {file.uploadedAt
-                            ? new Date(file.uploadedAt).toLocaleDateString(
-                                "es-ES",
-                                { day: "2-digit", month: "2-digit" },
-                              )
-                            : ""}
+                          {formatUploadDate(file.uploadedAt)}
                         </Text>
                       </View>
                     </View>
@@ -606,6 +662,35 @@ export default function GroupDetailsScreen({ route, navigation }) {
             <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
               {t('editGroupDesc')}
             </Text>
+
+            {/* ── Foto del grupo ── */}
+            <TouchableOpacity
+              onPress={handlePickGroupPhoto}
+              disabled={uploadingPhoto || saving}
+              style={styles.photoPickerBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar foto del grupo"
+              accessibilityHint="Doble toque para seleccionar una imagen"
+            >
+              {uploadingPhoto ? (
+                <View style={styles.photoPickerPlaceholder}>
+                  <ActivityIndicator color="#4F46E5" />
+                </View>
+              ) : editPhotoUrl ? (
+                <View>
+                  <Image source={{ uri: editPhotoUrl }} style={styles.photoPickerImg} />
+                  <View style={styles.photoPickerOverlay}>
+                    <Text style={styles.photoPickerOverlayText}>✏️</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={[styles.photoPickerPlaceholder, { backgroundColor: isDark ? "#1E1B4B" : "#EEF2FF" }]}>
+                  <Text style={{ fontSize: 28 }}>📷</Text>
+                  <Text style={[styles.photoPickerHint, { color: theme.textMuted }]}>Añadir foto</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
             <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>{t('groupNameLabel')}</Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
@@ -807,7 +892,6 @@ const styles = StyleSheet.create({
     padding: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     marginBottom: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -816,36 +900,46 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   fileInfo: {
+    flex: 1,                  // Toma todo el espacio disponible
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
+    minWidth: 0,              // Permite que los hijos se trunquen
+  },
+  fileTextBlock: {
+    flex: 1,
+    minWidth: 0,              // Clave para que numberOfLines funcione en flex
   },
   fileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     backgroundColor: "#FEE2E2",
     justifyContent: "center",
     alignItems: "center",
+    flexShrink: 0,            // No se encoge nunca
   },
   fileIconText: {
-    fontSize: 10,
-    fontWeight: "700",
+    fontSize: 9,
+    fontWeight: "800",
     color: "#DC2626",
+    letterSpacing: 0.5,
   },
   fileName: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "700",
     color: "#1F2937",
   },
   fileDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#9CA3AF",
-    marginTop: 2,
+    marginTop: 1,
   },
   fileActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
+    flexShrink: 0,            // Los botones nunca se encogen
+    marginLeft: 8,
   },
   actionButton: {
     width: 36,
@@ -1009,6 +1103,44 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 6,
     marginTop: 4,
+  },
+  // Photo picker inside edit modal
+  photoPickerBtn: {
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  photoPickerPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    backgroundColor: "#EEF2FF",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+  },
+  photoPickerImg: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+  },
+  photoPickerOverlay: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "#4F46E5",
+    borderRadius: 10,
+    width: 26,
+    height: 26,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  photoPickerOverlayText: {
+    fontSize: 14,
+  },
+  photoPickerHint: {
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 2,
   },
   // Invite Modal
   modalOverlay: {

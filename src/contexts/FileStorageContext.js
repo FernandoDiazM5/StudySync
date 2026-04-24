@@ -116,6 +116,51 @@ export const FileStorageProvider = ({ children }) => {
   };
 
   /**
+   * Subir/reemplazar la foto de perfil de un grupo
+   * @param {string} groupId - ID del grupo
+   * @param {string} fileUri - URI local de la imagen (blob: o file://)
+   * @param {string} mimeType - tipo MIME de la imagen
+   * @returns {Promise<string>} URL pública de la foto
+   */
+  const uploadGroupAvatar = async (groupId, fileUri, mimeType) => {
+    try {
+      console.log(`[FileStorage] Subiendo avatar del grupo: ${groupId}`);
+      const ext = mimeType?.split('/')[1]?.split('+')[0] || 'jpg';
+      const filePath = `avatars/${groupId}/photo.${ext}`;
+      const contentType = mimeType || 'image/jpeg';
+
+      const response = await fetch(fileUri);
+      if (!response.ok) {
+        throw new Error(`No se pudo leer la imagen (status ${response.status})`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      console.log(`[FileStorage] Avatar tamaño: ${arrayBuffer.byteLength} bytes`);
+
+      // upsert: true → sobreescribe el avatar anterior
+      const { data, error } = await supabase.storage
+        .from('group-files')
+        .upload(filePath, arrayBuffer, { contentType, upsert: true });
+
+      if (error) {
+        console.error('[FileStorage] Error avatar:', JSON.stringify(error));
+        throw new Error(`Error al subir foto: ${error.message}`);
+      }
+
+      console.log('[FileStorage] Avatar subido OK:', data);
+
+      const { data: publicData } = supabase.storage
+        .from('group-files')
+        .getPublicUrl(filePath);
+
+      // Añadir timestamp para forzar recarga y evitar caché
+      return `${publicData.publicUrl}?t=${Date.now()}`;
+    } catch (error) {
+      console.error('[FileStorage] Error en uploadGroupAvatar:', error);
+      throw error;
+    }
+  };
+
+  /**
    * Obtener URL pública de un archivo
    * @param {string} filePath - Ruta del archivo
    * @returns {string}
@@ -131,6 +176,7 @@ export const FileStorageProvider = ({ children }) => {
     <FileStorageContext.Provider
       value={{
         uploadGroupFile,
+        uploadGroupAvatar,
         deleteGroupFile,
         getGroupFiles,
         getPublicUrl,

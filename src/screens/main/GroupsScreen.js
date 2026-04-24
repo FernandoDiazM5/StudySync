@@ -15,6 +15,7 @@ import {
   Alert,
 } from "react-native";
 import Text from "../../components/AppText";
+import GroupAvatar from "../../components/GroupAvatar";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -194,9 +195,13 @@ export default function GroupsScreen({ navigation }) {
             </View>
           </View>
 
-          <View style={styles.avatar}>
-            <UsersRound size={22} color="#4F46E5" />
-          </View>
+          <GroupAvatar
+            photoURL={group.photoURL}
+            name={group.name}
+            size={44}
+            borderRadius={12}
+            showInitials={true}
+          />
         </View>
 
         {totalTasks > 0 && (
