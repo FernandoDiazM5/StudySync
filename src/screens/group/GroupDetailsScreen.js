@@ -280,6 +280,10 @@ export default function GroupDetailsScreen({ route, navigation }) {
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+          accessibilityHint="Doble toque para regresar"
         >
           <ChevronLeft color={theme.textSecondary} size={24} />
         </TouchableOpacity>
@@ -294,6 +298,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
             onPress={handleOpenEditModal}
             style={[styles.editHeaderBtn, { backgroundColor: isDark ? "#1E1B4B" : "#EEF2FF" }]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Editar grupo"
+            accessibilityHint="Doble toque para editar el nombre y descripción"
           >
             <Pencil color="#4F46E5" size={20} />
           </TouchableOpacity>
@@ -309,6 +316,10 @@ export default function GroupDetailsScreen({ route, navigation }) {
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === tab }}
+            accessibilityLabel={tab === "tareas" ? "Tareas" : tab === "archivos" ? "Archivos" : "Miembros"}
+            accessibilityHint="Doble toque para ver esta sección"
           >
             <Text
               style={[
@@ -364,6 +375,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                         navigation.navigate("CreateTask", { groupId })
                       }
                       activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel="Crear tarea"
+                      accessibilityHint="Doble toque para crear una nueva tarea"
                     >
                       <Plus color="#4F46E5" size={16} />
                       <Text style={styles.addButtonText}>
@@ -435,6 +449,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                           }
                         }}
                         style={[styles.actionButton, { backgroundColor: isDark ? "#312E81" : "#EEF2FF" }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Abrir ${file.fileName}`}
+                        accessibilityHint="Doble toque para abrir el archivo en el navegador"
                       >
                         <Text style={{ color: '#4F46E5', fontSize: 12 }}>↓</Text>
                       </TouchableOpacity>
@@ -444,6 +461,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                             Alert.alert(
                               t('confirm'),
                               t('deleteFileConfirm'),
+
                               [
                                 { text: t('cancel'), style: 'cancel' },
                                 {
@@ -463,6 +481,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                             );
                           }}
                           style={[styles.actionButton, { backgroundColor: '#FEE2E2' }]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Eliminar ${file.fileName}`}
+                          accessibilityHint="Doble toque para eliminar este archivo"
                         >
                           <Text style={{ color: '#DC2626', fontSize: 12 }}>🗑</Text>
                         </TouchableOpacity>
@@ -481,6 +502,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     onPress={uploading ? null : handleFileUpload}
                     activeOpacity={0.7}
                     disabled={uploading}
+                    accessibilityRole="button"
+                    accessibilityLabel={uploading ? "Subiendo archivo" : "Subir archivo"}
+                    accessibilityHint="Doble toque para seleccionar un archivo"
                   >
                     <Text style={[styles.addButtonDashedText, { color: theme.textSecondary }]}>
                       {uploading ? t('uploading') : t('uploadFile')}
@@ -518,6 +542,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                   <TouchableOpacity
                     onPress={() => handleRemoveMember(member.id, member.name)}
                     style={styles.removeButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Expulsar a ${member.name}`}
+                    accessibilityHint="Doble toque para eliminar este miembro del grupo"
                   >
                     <Text style={styles.removeButtonText}>{t('removeMember')}</Text>
                   </TouchableOpacity>
@@ -535,6 +562,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                   style={styles.addButton}
                   onPress={handleInviteMember}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Invitar miembro"
+                  accessibilityHint="Doble toque para invitar a alguien al grupo"
                 >
                   <UserPlus color="#4F46E5" size={16} />
                   <Text style={styles.addButtonText}>{t('inviteMembers')}</Text>
@@ -553,6 +583,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
           style={styles.chatButton}
           onPress={() => navigation.navigate("Chat", { groupId })}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir chat"
+          accessibilityHint="Doble toque para abrir el chat del grupo"
         >
           <MessageSquare color="#FFFFFF" size={20} />
           <Text style={styles.chatButtonText}>{t('chat')}</Text>
@@ -581,6 +614,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
               placeholder={t('groupNamePlaceholder2')}
               placeholderTextColor={theme.textMuted}
               editable={!saving}
+              accessibilityLabel="Nombre del grupo"
+              accessibilityHint="Ingresa el nombre del grupo"
             />
             <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>{t('groupDescLabel')}</Text>
             <TextInput
@@ -591,12 +626,17 @@ export default function GroupDetailsScreen({ route, navigation }) {
               placeholderTextColor={theme.textMuted}
               multiline
               editable={!saving}
+              accessibilityLabel="Descripción del grupo"
+              accessibilityHint="Ingresa una descripción para el grupo"
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]}
                 onPress={() => setEditModalVisible(false)}
                 disabled={saving}
+                accessibilityRole="button"
+                accessibilityLabel="Cancelar"
+                accessibilityHint="Doble toque para cancelar la edición"
               >
                 <Text style={[styles.modalCancelText, { color: theme.text }]}>{t('cancel')}</Text>
               </TouchableOpacity>
@@ -604,6 +644,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 style={[styles.modalBtn, styles.modalSendBtn, saving && { opacity: 0.6 }]}
                 onPress={handleSaveGroup}
                 disabled={saving}
+                accessibilityRole="button"
+                accessibilityLabel="Guardar cambios del grupo"
+                accessibilityHint="Doble toque para guardar los cambios del grupo"
               >
                 <Text style={styles.modalSendText}>{saving ? t('loading') : t('save')}</Text>
               </TouchableOpacity>
@@ -636,12 +679,17 @@ export default function GroupDetailsScreen({ route, navigation }) {
               autoCapitalize="none"
               autoCorrect={false}
               editable={!inviting}
+              accessibilityLabel="Correo del invitado"
+              accessibilityHint="Ingresa el correo electrónico del usuario a invitar"
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]}
                 onPress={() => setInviteModalVisible(false)}
                 disabled={inviting}
+                accessibilityRole="button"
+                accessibilityLabel="Cancelar"
+                accessibilityHint="Doble toque para cancelar la invitación"
               >
                 <Text style={[styles.modalCancelText, { color: theme.text }]}>{t('cancel')}</Text>
               </TouchableOpacity>
@@ -653,6 +701,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 ]}
                 onPress={handleSendInvitation}
                 disabled={inviting}
+                accessibilityRole="button"
+                accessibilityLabel="Enviar invitación"
+                accessibilityHint="Doble toque para enviar la invitación al usuario"
               >
                 <Text style={styles.modalSendText}>
                   {inviting ? t('loading') : t('send')}

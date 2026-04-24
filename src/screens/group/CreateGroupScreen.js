@@ -10,6 +10,7 @@ import {
   StatusBar,
 } from "react-native";
 import Text from "../../components/AppText";
+import AppButton from "../../components/AppButton";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { ChevronLeft, Users } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
@@ -49,9 +50,13 @@ export default function CreateGroupScreen({ navigation }) {
     <View style={s.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
       <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <AppButton
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Volver"
+          accessibilityHint="Doble toque para regresar"
+        >
           <ChevronLeft color="#6B7280" size={24} />
-        </TouchableOpacity>
+        </AppButton>
         <Text style={s.headerTitle}>{t('createNewGroup')}</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -70,6 +75,8 @@ export default function CreateGroupScreen({ navigation }) {
             placeholderTextColor="#9CA3AF"
             value={name}
             onChangeText={setName}
+            accessibilityLabel="Nombre del grupo"
+            accessibilityHint="Escribe el nombre de tu grupo de estudio"
           />
         </View>
         <View>
@@ -80,19 +87,24 @@ export default function CreateGroupScreen({ navigation }) {
             placeholderTextColor="#9CA3AF"
             value={desc}
             onChangeText={setDesc}
+            accessibilityLabel="Descripción del grupo"
+            accessibilityHint="Escribe una descripción opcional para el grupo"
           />
         </View>
-        <TouchableOpacity
+        <AppButton
           style={[s.btn, loading && { opacity: 0.7 }]}
           onPress={handleCreateGroup}
           disabled={loading}
+          accessibilityLabel="Crear grupo"
+          accessibilityHint="Doble toque para crear el grupo de estudio"
+          accessibilityState={{ disabled: loading }}
         >
           {loading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
             <Text style={s.btnText}>{t('createGroup')}</Text>
           )}
-        </TouchableOpacity>
+        </AppButton>
       </View>
     </View>
   );

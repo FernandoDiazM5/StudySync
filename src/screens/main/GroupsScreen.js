@@ -156,6 +156,10 @@ export default function GroupsScreen({ navigation }) {
           navigation.navigate("GroupDetails", { groupId: group.id })
         }
         activeOpacity={0.7}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={`Grupo: ${group.name}`}
+        accessibilityHint="Doble toque para ver el detalle del grupo"
       >
         <View style={styles.cardHeader}>
           <View style={styles.cardContent}>
@@ -239,6 +243,8 @@ export default function GroupsScreen({ navigation }) {
             placeholderTextColor={theme.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            accessibilityLabel="Buscar grupo"
+            accessibilityHint="Escribe el nombre del grupo que buscas"
           />
         </View>
       </View>
@@ -282,6 +288,10 @@ export default function GroupsScreen({ navigation }) {
                       style={[styles.invitationBtn, styles.declineBtn]}
                       onPress={() => handleDeclineInvitation(inv.id)}
                       activeOpacity={0.7}
+                      accessible={true}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Rechazar invitación a ${inv.groupName}`}
+                      accessibilityHint="Doble toque para rechazar"
                     >
                       <X color="#DC2626" size={18} />
                     </TouchableOpacity>
@@ -289,6 +299,10 @@ export default function GroupsScreen({ navigation }) {
                       style={[styles.invitationBtn, styles.acceptBtn]}
                       onPress={() => handleAcceptInvitation(inv)}
                       activeOpacity={0.7}
+                      accessible={true}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Aceptar invitación a ${inv.groupName}`}
+                      accessibilityHint="Doble toque para aceptar y unirte al grupo"
                     >
                       <Check color="#FFFFFF" size={18} />
                     </TouchableOpacity>
@@ -316,6 +330,10 @@ export default function GroupsScreen({ navigation }) {
         style={styles.fab}
         onPress={() => navigation.navigate("CreateGroup")}
         activeOpacity={0.8}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel="Crear nuevo grupo"
+        accessibilityHint="Doble toque para crear un grupo de estudio"
       >
         <Plus color="#FFFFFF" size={24} />
       </TouchableOpacity>

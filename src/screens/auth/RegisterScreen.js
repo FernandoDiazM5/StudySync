@@ -17,6 +17,7 @@ import {
   StatusBar,
 } from 'react-native';
 import Text from '../../components/AppText';
+import AppButton from '../../components/AppButton';
 import { useAccessibility } from '../../contexts/AccessibilityContext';
 import { Users, ChevronLeft, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react-native';
 import { registerUser } from '../../services/authService';
@@ -114,12 +115,14 @@ export default function RegisterScreen({ navigation }) {
       >
         <View style={styles.card}>
           {/* Botón Volver */}
-          <TouchableOpacity
+          <AppButton
             onPress={() => navigation.goBack()}
             style={styles.backButton}
+            accessibilityLabel="Volver"
+            accessibilityHint="Doble toque para regresar al inicio de sesión"
           >
             <ChevronLeft color="#9CA3AF" size={24} />
-          </TouchableOpacity>
+          </AppButton>
 
           {/* Logo */}
           <View style={styles.logoContainer}>
@@ -141,6 +144,8 @@ export default function RegisterScreen({ navigation }) {
                 value={name}
                 onChangeText={setName}
                 onBlur={() => touch('name')}
+                accessibilityLabel="Campo nombre completo"
+                accessibilityHint="Ingresa tu nombre y apellido"
               />
               {touched.name && errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
             </View>
@@ -157,6 +162,8 @@ export default function RegisterScreen({ navigation }) {
                 value={email}
                 onChangeText={setEmail}
                 onBlur={() => touch('email')}
+                accessibilityLabel="Campo correo electrónico"
+                accessibilityHint="Ingresa tu dirección de correo electrónico"
               />
               {touched.email && errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
@@ -171,6 +178,8 @@ export default function RegisterScreen({ navigation }) {
                 value={phone}
                 onChangeText={setPhone}
                 onBlur={() => touch('phone')}
+                accessibilityLabel="Campo número de teléfono"
+                accessibilityHint="Ingresa tu número de teléfono"
               />
               {touched.phone && errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
             </View>
@@ -186,14 +195,18 @@ export default function RegisterScreen({ navigation }) {
                   value={password}
                   onChangeText={setPassword}
                   onBlur={() => touch('password')}
+                  accessibilityLabel="Campo contraseña"
+                  accessibilityHint="Ingresa una contraseña segura de al menos 8 caracteres"
                 />
-                <TouchableOpacity
+                <AppButton
                   style={styles.eyeBtn}
                   onPress={() => setShowPwd((v) => !v)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  overrideText={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 >
                   {showPwd ? <EyeOff color="#9CA3AF" size={18} /> : <Eye color="#9CA3AF" size={18} />}
-                </TouchableOpacity>
+                </AppButton>
               </View>
               {touched.password && errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
             </View>
@@ -215,14 +228,18 @@ export default function RegisterScreen({ navigation }) {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   onBlur={() => touch('confirmPassword')}
+                  accessibilityLabel="Campo confirmar contraseña"
+                  accessibilityHint="Repite la contraseña para confirmarla"
                 />
                 <View style={styles.confirmIcons}>
-                  <TouchableOpacity
+                  <AppButton
                     onPress={() => setShowConfirmPwd((v) => !v)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel={showConfirmPwd ? 'Ocultar confirmación de contraseña' : 'Mostrar confirmación de contraseña'}
+                    overrideText={showConfirmPwd ? 'Ocultar confirmación de contraseña' : 'Mostrar confirmación de contraseña'}
                   >
                     {showConfirmPwd ? <EyeOff color="#9CA3AF" size={18} /> : <Eye color="#9CA3AF" size={18} />}
-                  </TouchableOpacity>
+                  </AppButton>
                   {confirmPassword.length > 0 && (
                     password === confirmPassword
                       ? <CheckCircle color="#10B981" size={22} />
@@ -235,18 +252,21 @@ export default function RegisterScreen({ navigation }) {
               )}
             </View>
 
-            <TouchableOpacity
+            <AppButton
               style={[styles.button, (!isValid || loading) && styles.buttonDisabled]}
               onPress={handleRegister}
               disabled={!isValid || loading}
               activeOpacity={0.8}
+              accessibilityLabel="Registrarse"
+              accessibilityHint="Doble toque para crear tu cuenta"
+              accessibilityState={{ disabled: !isValid || loading }}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.buttonText}>{t('register').toUpperCase()}</Text>
               )}
-            </TouchableOpacity>
+            </AppButton>
           </View>
         </View>
       </ScrollView>

@@ -61,6 +61,9 @@ export default function BottomTabNavigator() {
             fontSize: 10,
             fontWeight: '700',
           },
+          tabBarAccessibilityLabel: invitationCount > 0
+            ? `Grupos, ${invitationCount} invitaciones pendientes`
+            : 'Grupos',
         }}
       />
       <Tab.Screen
@@ -68,6 +71,7 @@ export default function BottomTabNavigator() {
         component={MessagesListScreen}
         options={{
           tabBarIcon: ({ color, size }) => <MessageSquare color={color} size={size} />,
+          tabBarAccessibilityLabel: 'Mensajes',
         }}
       />
       <Tab.Screen
@@ -75,6 +79,7 @@ export default function BottomTabNavigator() {
         component={ProfileScreen}
         options={{
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+          tabBarAccessibilityLabel: 'Perfil',
         }}
       />
     </Tab.Navigator>

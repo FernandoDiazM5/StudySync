@@ -77,6 +77,10 @@ export default function MessagesListScreen({ navigation }) {
         style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }, isUnread && s.cardUnread]}
         onPress={() => navigation.navigate("Chat", { groupId: group.id })}
         activeOpacity={0.7}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={`Chat: ${group.name}${isUnread ? ', mensaje sin leer' : ''}`}
+        accessibilityHint="Doble toque para abrir el chat"
       >
         <View style={s.row}>
           <View style={s.leftSection}>

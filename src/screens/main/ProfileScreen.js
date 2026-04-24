@@ -121,7 +121,11 @@ export default function ProfileScreen() {
       <View style={[s.container, { backgroundColor: theme.bg }]}>
         <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
         <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
-          <AppButton onPress={() => setSubView("main")}>
+          <AppButton
+            onPress={() => setSubView("main")}
+            accessibilityLabel="Volver"
+            accessibilityHint="Doble toque para regresar al perfil"
+          >
             <ChevronLeft color="#C7D2FE" size={24} />
           </AppButton>
           <Text style={s.subHeaderTitle}>{t('editProfile')}</Text>
@@ -138,6 +142,8 @@ export default function ProfileScreen() {
                 value={editName}
                 onChangeText={setEditName}
                 placeholderTextColor={theme.textMuted}
+                accessibilityLabel="Nombre completo"
+                accessibilityHint="Ingresa tu nombre completo"
               />
             </View>
             <View>
@@ -148,6 +154,8 @@ export default function ProfileScreen() {
                 onChangeText={setEditPhone}
                 keyboardType="phone-pad"
                 placeholderTextColor={theme.textMuted}
+                accessibilityLabel="Número de celular"
+                accessibilityHint="Ingresa tu número de teléfono"
               />
             </View>
             <View>
@@ -156,10 +164,17 @@ export default function ProfileScreen() {
                 style={[s.input, s.inputDisabled, { backgroundColor: isDark ? "#374151" : "#F3F4F6", borderColor: theme.inputBorder, color: theme.textMuted }]}
                 value={userProfile?.email || ""}
                 editable={false}
+                accessibilityLabel="Correo electrónico"
+                accessibilityHint="El correo no se puede modificar"
               />
               <Text style={[s.hint, { color: theme.textMuted }]}>El correo no se puede modificar.</Text>
             </View>
-            <AppButton style={s.saveBtn} onPress={handleProfileSubmit}>
+            <AppButton
+              style={s.saveBtn}
+              onPress={handleProfileSubmit}
+              accessibilityLabel="Guardar cambios"
+              accessibilityHint="Doble toque para guardar tu información"
+            >
               <User color="#FFF" size={16} />
               <Text style={s.saveBtnText}>Guardar Cambios</Text>
             </AppButton>
@@ -175,7 +190,11 @@ export default function ProfileScreen() {
       <View style={[s.container, { backgroundColor: theme.bg }]}>
         <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
         <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
-          <AppButton onPress={() => setSubView("main")}>
+          <AppButton
+            onPress={() => setSubView("main")}
+            accessibilityLabel="Volver"
+            accessibilityHint="Doble toque para regresar al perfil"
+          >
             <ChevronLeft color="#C7D2FE" size={24} />
           </AppButton>
           <Text style={s.subHeaderTitle}>{t('changePassword')}</Text>
@@ -195,8 +214,16 @@ export default function ProfileScreen() {
                   onChangeText={setCurrentPwd}
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
+                  accessibilityLabel="Contraseña actual"
+                  accessibilityHint="Ingresa tu contraseña actual"
                 />
-                <AppButton style={s.eyeBtn} onPress={() => setShowCurrentPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <AppButton
+                  style={s.eyeBtn}
+                  onPress={() => setShowCurrentPwd((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  overrideText={showCurrentPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  accessibilityHint={showCurrentPwd ? 'Doble toque para ocultar la contraseña' : 'Doble toque para mostrar la contraseña'}
+                >
                   {showCurrentPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
                 </AppButton>
               </View>
@@ -211,8 +238,16 @@ export default function ProfileScreen() {
                   onChangeText={setNewPwd}
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
+                  accessibilityLabel="Nueva contraseña"
+                  accessibilityHint="Ingresa tu nueva contraseña"
                 />
-                <AppButton style={s.eyeBtn} onPress={() => setShowNewPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <AppButton
+                  style={s.eyeBtn}
+                  onPress={() => setShowNewPwd((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  overrideText={showNewPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  accessibilityHint={showNewPwd ? 'Doble toque para ocultar la contraseña' : 'Doble toque para mostrar la contraseña'}
+                >
                   {showNewPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
                 </AppButton>
               </View>
@@ -227,13 +262,26 @@ export default function ProfileScreen() {
                   onChangeText={setConfirmPwd}
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
+                  accessibilityLabel="Confirmar nueva contraseña"
+                  accessibilityHint="Repite tu nueva contraseña para confirmar"
                 />
-                <AppButton style={s.eyeBtn} onPress={() => setShowConfirmPwd((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <AppButton
+                  style={s.eyeBtn}
+                  onPress={() => setShowConfirmPwd((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  overrideText={showConfirmPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  accessibilityHint={showConfirmPwd ? 'Doble toque para ocultar la contraseña' : 'Doble toque para mostrar la contraseña'}
+                >
                   {showConfirmPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
                 </AppButton>
               </View>
             </View>
-            <AppButton style={s.saveBtn} onPress={handlePasswordSubmit}>
+            <AppButton
+              style={s.saveBtn}
+              onPress={handlePasswordSubmit}
+              accessibilityLabel="Guardar contraseña"
+              accessibilityHint="Doble toque para actualizar tu contraseña"
+            >
               <Lock color="#FFF" size={16} />
               <Text style={s.saveBtnText}>Guardar Contraseña</Text>
             </AppButton>
@@ -267,6 +315,8 @@ export default function ProfileScreen() {
               setEditPhone(userProfile?.phone || "");
               setSubView("editProfile");
             }}
+            accessibilityLabel="Editar perfil"
+            accessibilityHint="Doble toque para editar tu información personal"
           >
             <Edit3 color="#FFF" size={14} />
           </AppButton>
@@ -297,6 +347,8 @@ export default function ProfileScreen() {
               setEditPhone(userProfile?.phone || "");
               setSubView("editProfile");
             }}
+            accessibilityLabel="Información personal"
+            accessibilityHint="Doble toque para editar tu nombre y teléfono"
           >
             <View style={s.settingsLeft}>
               <View style={[s.settingsIcon, { backgroundColor: "#EFF6FF" }]}>
@@ -310,6 +362,8 @@ export default function ProfileScreen() {
           <AppButton
             style={s.settingsRow}
             onPress={() => setSubView("password")}
+            accessibilityLabel="Cambiar contraseña"
+            accessibilityHint="Doble toque para actualizar tu contraseña"
           >
             <View style={s.settingsLeft}>
               <View style={[s.settingsIcon, { backgroundColor: "#FFF7ED" }]}>
@@ -324,6 +378,9 @@ export default function ProfileScreen() {
             style={s.settingsRow}
             onPress={() => setNotificationsEnabled((prev) => !prev)}
             activeOpacity={0.7}
+            accessibilityLabel={notificationsEnabled ? "Notificaciones activadas" : "Notificaciones desactivadas"}
+            accessibilityHint="Doble toque para cambiar"
+            accessibilityState={{ checked: notificationsEnabled }}
           >
             <View style={s.settingsLeft}>
               <View style={[s.settingsIcon, { backgroundColor: "#FAF5FF" }]}>
@@ -345,6 +402,9 @@ export default function ProfileScreen() {
             style={s.settingsRow}
             onPress={toggleTheme}
             activeOpacity={0.7}
+            accessibilityLabel={isDark ? "Modo oscuro activado" : "Modo claro activado"}
+            accessibilityHint="Doble toque para cambiar el tema"
+            accessibilityState={{ checked: isDark }}
           >
             <View style={s.settingsLeft}>
               <View style={[s.settingsIcon, { backgroundColor: isDark ? "#1E3A5F" : "#F0F9FF" }]}>
@@ -364,6 +424,8 @@ export default function ProfileScreen() {
             style={s.settingsRow}
             onPress={() => setIsMenuOpen(true)}
             activeOpacity={0.7}
+            accessibilityLabel="Menú de accesibilidad"
+            accessibilityHint="Doble toque para abrir opciones de accesibilidad"
           >
             <View style={s.settingsLeft}>
               <View style={[s.settingsIcon, { backgroundColor: isDark ? "#14532D" : "#F0FDF4" }]}>
@@ -379,7 +441,12 @@ export default function ProfileScreen() {
         </View>
 
         {/* Logout */}
-        <AppButton style={s.logoutBtn} onPress={handleLogout}>
+        <AppButton
+          style={s.logoutBtn}
+          onPress={handleLogout}
+          accessibilityLabel="Cerrar sesión"
+          accessibilityHint="Doble toque para salir de tu cuenta"
+        >
           <LogOut color="#DC2626" size={20} />
           <Text style={s.logoutText}>{t('logoutSecure')}</Text>
         </AppButton>

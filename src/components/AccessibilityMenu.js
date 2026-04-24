@@ -100,8 +100,13 @@ export default function AccessibilityMenu() {
       animationType="slide"
       visible={isMenuOpen}
       onRequestClose={() => setIsMenuOpen(false)}
+      accessibilityViewIsModal={true}
     >
-      <View style={styles.overlay}>
+      <View 
+        style={styles.overlay}
+        importantForAccessibility={isMenuOpen ? "auto" : "no-hide-descendants"}
+        accessibilityElementsHidden={!isMenuOpen}
+      >
         <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
           {/* Header */}
           <View style={[styles.header, { backgroundColor: theme.headerBg }]}>

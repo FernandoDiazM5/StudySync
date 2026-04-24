@@ -140,6 +140,8 @@ export default function LoginScreen({ navigation }) {
               autoCorrect={false}
               value={email}
               onChangeText={setEmail}
+              accessibilityLabel="Correo electrónico"
+              accessibilityHint="Ingresa tu correo universitario"
             />
           </View>
 
@@ -153,12 +155,15 @@ export default function LoginScreen({ navigation }) {
                 secureTextEntry={!showPwd}
                 value={password}
                 onChangeText={setPassword}
+                accessibilityLabel="Contraseña"
+                accessibilityHint="Ingresa tu contraseña"
               />
               <AppButton
                 style={styles.eyeBtn}
                 overrideText={showPwd ? 'Ocultar Contraseña' : 'Mostrar Contraseña'}
                 onPress={() => setShowPwd((v) => !v)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityHint={showPwd ? 'Doble toque para ocultar la contraseña' : 'Doble toque para mostrar la contraseña'}
               >
                 {showPwd
                   ? <EyeOff color="#9CA3AF" size={18} />
@@ -172,6 +177,9 @@ export default function LoginScreen({ navigation }) {
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.8}
+            accessibilityLabel="Iniciar sesión"
+            accessibilityHint="Doble toque para ingresar a tu cuenta"
+            accessibilityState={{ disabled: loading }}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -184,6 +192,8 @@ export default function LoginScreen({ navigation }) {
         <AppButton
           onPress={() => navigation.navigate("Register")}
           style={styles.registerLink}
+          accessibilityLabel="Ir a registro"
+          accessibilityHint="Doble toque para crear una cuenta nueva"
         >
           <Text style={styles.registerText}>{t('register')}</Text>
         </AppButton>

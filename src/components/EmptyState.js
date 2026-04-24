@@ -4,7 +4,8 @@
 // ============================================
 
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import AppButton from './AppButton';
 import Text from './AppText';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -18,13 +19,15 @@ export default function EmptyState({ icon: Icon, title, message, actionText, onA
       <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
       <Text style={[styles.message, { color: theme.textSecondary }]}>{message}</Text>
       {actionText && (
-        <TouchableOpacity
+        <AppButton
           style={styles.actionButton}
           onPress={onAction}
           activeOpacity={0.7}
+          accessibilityLabel={actionText}
+          accessibilityHint="Doble toque para realizar esta acción"
         >
           <Text style={styles.actionText}>{actionText}</Text>
-        </TouchableOpacity>
+        </AppButton>
       )}
     </View>
   );

@@ -12,6 +12,7 @@ import {
   Platform,
 } from "react-native";
 import Text from "../../components/AppText";
+import AppButton from "../../components/AppButton";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -109,9 +110,13 @@ export default function CreateTaskScreen({ route, navigation }) {
     <View style={[s.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.card} />
       <View style={[s.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <AppButton
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Volver"
+          accessibilityHint="Doble toque para regresar sin guardar"
+        >
           <ChevronLeft color={theme.textSecondary} size={24} />
-        </TouchableOpacity>
+        </AppButton>
         <Text style={[s.headerTitle, { color: theme.text }]}>
           {isEditing ? t('edit') + ' ' + t('tasks') : t('newTask')}
         </Text>
@@ -155,11 +160,14 @@ export default function CreateTaskScreen({ route, navigation }) {
               {members.map((m) => {
                 const selected = assigneeId === m.id;
                 return (
-                  <TouchableOpacity
+                  <AppButton
                     key={m.id}
                     style={[s.memberOption, { backgroundColor: theme.card, borderColor: theme.inputBorder }, selected && s.memberOptionSelected]}
                     onPress={() => setAssigneeId(m.id)}
                     activeOpacity={0.7}
+                    accessibilityLabel={`Asignar a ${m.name}`}
+                    accessibilityHint="Doble toque para asignar esta tarea a este miembro"
+                    accessibilityState={{ selected }}
                   >
                     <Text
                       style={[
@@ -171,7 +179,7 @@ export default function CreateTaskScreen({ route, navigation }) {
                       {m.name}
                     </Text>
                     {selected && <Check color="#4F46E5" size={18} />}
-                  </TouchableOpacity>
+                  </AppButton>
                 );
               })}
             </View>
@@ -190,13 +198,17 @@ export default function CreateTaskScreen({ route, navigation }) {
               }}
               keyboardType="numeric"
               maxLength={10}
+              accessibilityLabel="Fecha de vencimiento"
+              accessibilityHint="Ingresa la fecha en formato día guión mes guión año"
             />
-            <TouchableOpacity
+            <AppButton
               style={[s.calendarBtn, { backgroundColor: isDark ? "#1E1B4B" : "#EEF2FF", borderColor: isDark ? "#4F46E5" : "#A5B4FC" }]}
               onPress={() => setShowPicker(true)}
+              accessibilityLabel="Abrir calendario"
+              accessibilityHint="Doble toque para seleccionar la fecha con el calendario"
             >
               <Calendar color="#4F46E5" size={20} />
-            </TouchableOpacity>
+            </AppButton>
           </View>
           {showPicker && (
             <DateTimePicker
@@ -222,10 +234,13 @@ export default function CreateTaskScreen({ route, navigation }) {
             />
           )}
         </View>
-        <TouchableOpacity
+        <AppButton
           style={[s.btn, loading && { opacity: 0.7 }]}
           onPress={handleSubmit}
           disabled={loading}
+          accessibilityLabel={isEditing ? 'Guardar cambios' : 'Crear tarea'}
+          accessibilityHint={isEditing ? 'Doble toque para guardar los cambios de la tarea' : 'Doble toque para crear la nueva tarea'}
+          accessibilityState={{ disabled: loading }}
         >
           {loading ? (
             <ActivityIndicator color="#FFF" />
@@ -234,7 +249,7 @@ export default function CreateTaskScreen({ route, navigation }) {
               {isEditing ? t('saveChanges') : t('createTask')}
             </Text>
           )}
-        </TouchableOpacity>
+        </AppButton>
       </ScrollView>
     </View>
   );

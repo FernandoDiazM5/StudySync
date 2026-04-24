@@ -1,9 +1,8 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { TouchableOpacity } from 'react-native';
-import * as Speech from 'expo-speech';
 import { useAccessibility } from '../contexts/AccessibilityContext';
 
-// Extractor recursivo de strings para JSX elements
+// Extractor recursivo de texto plano desde JSX
 export const extractString = (node) => {
   if (!node) return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -12,36 +11,70 @@ export const extractString = (node) => {
   return '';
 };
 
-export default function AppButton({ children, overrideText, accessibilityLabel, ...props }) {
+/**
+ * AppButton — Botón con soporte completo de TalkBack / VoiceOver.
+ *
+ * DISEÑO SEMÁNTICO:
+ * - El botón ES el único elemento accesible del árbol (accessible={true}).
+ * - Los hijos (AppText) son accessible={false} por defecto, así no
+ *   compiten por el foco ni "roban" el doble-toque.
+ * - TalkBack anuncia: "<label>, Botón" y el usuario hace doble toque
+ *   en cualquier parte de la pantalla para activar onPress.
+ * - Cuando el narrador está activo, long-press lee el label en voz alta
+ *   y accessibilityHint da una pista de la acción.
+ *
+ * Props especiales:
+ *   overrideText       — texto alternativo para el narrador (si el label
+ *                        derivado de los hijos no es suficiente)
+ *   accessibilityLabel — etiqueta explícita para TalkBack
+ *   accessibilityHint  — pista de acción (solo visible con narrador ON)
+ */
+export default function AppButton({
+  children,
+  overrideText,
+  accessibilityLabel,
+  accessibilityHint,
+  ...props
+}) {
   const accessibility = useAccessibility();
+  const speechEnabled = accessibility?.speechEnabled ?? false;
 
-  // No detenemos el speech al desmontar: múltiples AppButton
-  // llamando a Speech.stop() al desmontarse cancelan la narración activa.
+  // Etiqueta que leerá TalkBack: prioridad → prop explícita → texto de hijos
+  const computedLabel = accessibilityLabel || extractString(children);
 
-  const handleLongPress = (event) => {
-    if (accessibility && accessibility.speechEnabled) {
-      try {
-        const textToRead = overrideText || extractString(children);
-        if (textToRead.trim().length > 0) {
-          accessibility.speakText(textToRead);
+  // Long-press: solo activo cuando el narrador está habilitado
+  const handleLongPress = speechEnabled
+    ? (event) => {
+        try {
+          const text = overrideText || computedLabel;
+          if (text.trim().length > 0) accessibility.speakText(text);
+        } catch (e) {
+          console.warn('[AppButton] Speech error:', e);
         }
-      } catch (error) {
-        console.warn('Error in button speech handler:', error);
+        props.onLongPress?.(event);
       }
-    }
-    if (props.onLongPress) {
-      props.onLongPress(event);
-    }
-  };
+    : props.onLongPress;
 
   return (
     <TouchableOpacity
       {...props}
-      onLongPress={handleLongPress}
-      delayLongPress={500}
+      // ─── ACCESIBILIDAD ───────────────────────────────────────────────
+      // accessible={true} siempre: TalkBack puede enfocar este botón.
+      // Sus hijos (AppText) son accessible={false}, así forman una unidad
+      // monolítica: 1 elemento de foco → 1 doble-toque → 1 onPress.
       accessible={true}
-      accessibilityLabel={accessibilityLabel || extractString(children)}
       accessibilityRole="button"
+      accessibilityLabel={computedLabel}
+      // Hint solo cuando el narrador está activo (no contamina la UI normal)
+      accessibilityHint={speechEnabled ? accessibilityHint : undefined}
+      accessibilityState={{
+        disabled: !!props.disabled,
+        // Si el consumer pasa selected/checked, lo propagamos
+        ...(props.accessibilityState || {}),
+      }}
+      // ────────────────────────────────────────────────────────────────
+      onLongPress={handleLongPress}
+      delayLongPress={speechEnabled ? 600 : props.delayLongPress}
     >
       {children}
     </TouchableOpacity>

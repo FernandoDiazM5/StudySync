@@ -43,6 +43,16 @@ export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, i
         onPress={() => onToggleStatus(task.id, task.status)}
         style={[styles.checkbox, getCheckboxStyle()]}
         activeOpacity={0.7}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isCompleted
+            ? `Tarea ${task.title}, completada. Doble toque para marcar como pendiente`
+            : isInProgress
+            ? `Tarea ${task.title}, en progreso. Doble toque para marcar como completada`
+            : `Tarea ${task.title}, pendiente. Doble toque para iniciar`
+        }
+        accessibilityState={{ checked: isCompleted }}
       >
         {isCompleted && <CheckSquare color="#FFFFFF" size={16} />}
         {isInProgress && <Clock color="#FFFFFF" size={16} />}
@@ -63,7 +73,14 @@ export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, i
             {task.title}
           </Text>
           {isLeader && (
-            <TouchableOpacity onPress={() => onEdit?.(task)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => onEdit?.(task)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={`Editar tarea ${task.title}`}
+              accessibilityHint="Doble toque para editar esta tarea"
+            >
               <Pencil color="#6B7280" size={14} />
             </TouchableOpacity>
           )}
