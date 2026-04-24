@@ -412,6 +412,26 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     onToggleStatus={handleToggleTaskStatus}
                     isLeader={isLeader}
                     onEdit={(task) => navigation.navigate("CreateTask", { groupId, task })}
+                    onDelete={(taskId, taskTitle) => {
+                      Alert.alert(
+                        t('confirm') || 'Confirmar',
+                        `¿Eliminar la tarea "${taskTitle}"?`,
+                        [
+                          { text: t('cancel') || 'Cancelar', style: 'cancel' },
+                          {
+                            text: t('delete') || 'Eliminar',
+                            style: 'destructive',
+                            onPress: async () => {
+                              try {
+                                await firestoreService.deleteTask(taskId);
+                              } catch (e) {
+                                Alert.alert('Error', 'No se pudo eliminar la tarea');
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
                   />
                 )}
                 contentContainerStyle={[

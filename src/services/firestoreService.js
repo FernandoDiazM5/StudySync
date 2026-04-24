@@ -64,12 +64,10 @@ export const getUserByEmail = async (email) => {
  */
 export const getUsersByIds = async (userIds) => {
   if (!userIds || userIds.length === 0) return [];
-  const users = [];
-  for (const uid of userIds) {
-    const user = await getUser(uid);
-    if (user) users.push(user);
-  }
-  return users;
+  const results = await Promise.all(
+    userIds.map(uid => getUser(uid).catch(() => null))
+  );
+  return results.filter(Boolean);
 };
 
 /**
@@ -370,18 +368,17 @@ export const updateTaskStatus = async (taskId, newStatus) => {
  */
 export const getTasksByGroups = async (groupIds) => {
   if (!groupIds || groupIds.length === 0) return [];
-  const allTasks = [];
-  for (const groupId of groupIds) {
-    const q = query(
-      collection(db, 'tasks'),
-      where('groupId', '==', groupId)
-    );
-    const snapshot = await getDocs(q);
-    snapshot.docs.forEach(doc => {
-      allTasks.push({ id: doc.id, ...doc.data() });
-    });
-  }
-  return allTasks;
+  const batchResults = await Promise.all(
+    groupIds.map(async (groupId) => {
+      const q = query(
+        collection(db, 'tasks'),
+        where('groupId', '==', groupId)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    })
+  );
+  return batchResults.flat();
 };
 
 // ==========================================
@@ -435,18 +432,26 @@ export const markMessagesAsRead = async (groupId, userId) => {
     where('groupId', '==', groupId)
   );
   const snapshot = await getDocs(q);
-  const batch = writeBatch(db);
   
-  snapshot.docs.forEach(docSnap => {
+  // Filtrar solo los mensajes que realmente necesitan ser marcados
+  const unreadDocs = snapshot.docs.filter(docSnap => {
     const data = docSnap.data();
-    if (!data.readBy || !data.readBy.includes(userId)) {
-      batch.update(docSnap.ref, {
-        readBy: arrayUnion(userId)
-      });
-    }
+    return !data.readBy || !data.readBy.includes(userId);
   });
   
-  await batch.commit();
+  // Si no hay mensajes sin leer, evitar batch vacío
+  if (unreadDocs.length === 0) return;
+  
+  // Firestore soporta máx. 500 operaciones por batch
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < unreadDocs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const chunk = unreadDocs.slice(i, i + BATCH_SIZE);
+    chunk.forEach(docSnap => {
+      batch.update(docSnap.ref, { readBy: arrayUnion(userId) });
+    });
+    await batch.commit();
+  }
 };
 
 /**
@@ -502,15 +507,31 @@ export const deleteMessage = async (messageId) => {
  */
 export const getLastMessage = async (groupId) => {
   try {
-    const q = query(
-      collection(db, 'messages'),
-      where('groupId', '==', groupId)
-    );
-    const snapshot = await getDocs(q);
-    if (snapshot.docs.length === 0) return null;
-    const messages = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    messages.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-    return messages[0];
+    // Intentar con orderBy + limit (requiere índice compuesto)
+    // Si falla, cae al método de fallback
+    try {
+      const q = query(
+        collection(db, 'messages'),
+        where('groupId', '==', groupId),
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
+      const snapshot = await getDocs(q);
+      if (snapshot.docs.length === 0) return null;
+      return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    } catch (indexError) {
+      // Fallback: sin orderBy (hasta que el índice compuesto sea creado)
+      console.warn('[getLastMessage] Índice compuesto no encontrado, usando fallback. Crea el índice en Firebase Console.');
+      const q = query(
+        collection(db, 'messages'),
+        where('groupId', '==', groupId)
+      );
+      const snapshot = await getDocs(q);
+      if (snapshot.docs.length === 0) return null;
+      const messages = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      messages.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      return messages[0];
+    }
   } catch (error) {
     logFirestoreError('getLastMessage')(error);
     return null;
@@ -568,7 +589,9 @@ export const addGroupFile = async (fileData) => {
       collection(db, 'files'),
       {
         ...fileData,
-        uploadedAt: new Date(),
+        uploadedAt: fileData.uploadedAt instanceof Date
+          ? fileData.uploadedAt.toISOString()
+          : (fileData.uploadedAt || new Date().toISOString()),
       }
     );
     return { id: docRef.id, ...fileData };
@@ -588,6 +611,94 @@ export const deleteGroupFile = async (groupId, fileId) => {
     return true;
   } catch (error) {
     console.error('Error deleting group file:', error);
+    throw error;
+  }
+};
+
+// ==========================================
+// ELIMINACIÓN DE GRUPOS Y TAREAS
+// ==========================================
+
+/**
+ * Eliminar una tarea por su ID
+ * Solo el líder del grupo debería invocar esta función
+ */
+export const deleteTask = async (taskId) => {
+  try {
+    await deleteDoc(doc(db, 'tasks', taskId));
+    return true;
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    throw error;
+  }
+};
+
+/**
+ * Eliminar un grupo completo y todos sus datos asociados
+ * Elimina: mensajes, tareas, archivos y el documento del grupo
+ * Solo el líder del grupo debería invocar esta función
+ */
+export const deleteGroup = async (groupId) => {
+  try {
+    // 1. Obtener todos los mensajes del grupo
+    const messagesQ = query(collection(db, 'messages'), where('groupId', '==', groupId));
+    const messagesSnap = await getDocs(messagesQ);
+
+    // 2. Obtener todas las tareas del grupo
+    const tasksQ = query(collection(db, 'tasks'), where('groupId', '==', groupId));
+    const tasksSnap = await getDocs(tasksQ);
+
+    // 3. Obtener todos los archivos del grupo
+    const filesQ = query(collection(db, 'files'), where('groupId', '==', groupId));
+    const filesSnap = await getDocs(filesQ);
+
+    // 4. Eliminar todo en batches (máx 500 por batch)
+    const allDocs = [
+      ...messagesSnap.docs,
+      ...tasksSnap.docs,
+      ...filesSnap.docs,
+    ];
+
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      const chunk = allDocs.slice(i, i + BATCH_SIZE);
+      chunk.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    // 5. Eliminar invitaciones pendientes del grupo
+    const invitesQ = query(collection(db, 'invitations'), where('groupId', '==', groupId));
+    const invitesSnap = await getDocs(invitesQ);
+    if (invitesSnap.docs.length > 0) {
+      const batch = writeBatch(db);
+      invitesSnap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    // 6. Eliminar el documento del grupo
+    await deleteDoc(doc(db, 'groups', groupId));
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting group:', error);
+    throw error;
+  }
+};
+
+/**
+ * Salir de un grupo (para miembros que no son el líder)
+ * Remueve al usuario del array de miembros
+ */
+export const leaveGroup = async (groupId, userId) => {
+  try {
+    const groupRef = doc(db, 'groups', groupId);
+    await updateDoc(groupRef, {
+      members: arrayRemove(userId),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error leaving group:', error);
     throw error;
   }
 };

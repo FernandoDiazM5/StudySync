@@ -43,7 +43,7 @@ export default function ChatScreen({ route, navigation }) {
   const [onlineMembers, setOnlineMembers] = useState([]);
   const [showOnline, setShowOnline] = useState(false);
   const keyboardAnim = useRef(new Animated.Value(0)).current;
-  const sendAnim = useRef(new Animated.Value(0)).current;
+  const [hasText, setHasText] = useState(false);
   const [actionMsg, setActionMsg] = useState(null);
   const [editingMsg, setEditingMsg] = useState(null);
   const [editText, setEditText] = useState("");
@@ -98,6 +98,7 @@ export default function ChatScreen({ route, navigation }) {
     loadGroup();
 
     // Marcar presencia
+    let clearPresence;
     if (user?.uid) {
       firestoreService.setUserPresence(user.uid, groupId).catch(() => {});
 
@@ -106,7 +107,7 @@ export default function ChatScreen({ route, navigation }) {
         if (!cancelled) firestoreService.setUserPresence(user.uid, groupId).catch(() => {});
       }, 90000);
 
-      var clearPresence = () => {
+      clearPresence = () => {
         clearInterval(presenceInterval);
         firestoreService.clearUserPresence(user.uid).catch(() => {});
       };
@@ -153,7 +154,7 @@ export default function ChatScreen({ route, navigation }) {
 
     textInputRef.current?.clear();
     inputValueRef.current = "";
-    sendAnim.setValue(0);
+    setHasText(false);
 
     try {
       await firestoreService.sendMessage({
@@ -568,6 +569,10 @@ export default function ChatScreen({ route, navigation }) {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel={t('back') || 'Volver'}
+            accessibilityHint="Doble toque para regresar"
           >
             <ChevronLeft color="#FFFFFF" size={24} />
           </TouchableOpacity>
@@ -585,7 +590,14 @@ export default function ChatScreen({ route, navigation }) {
             <Text style={styles.headerSubtitle}>{t('onlyAcademicTopics')}</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={() => setShowOnline(true)} style={{ marginLeft: 10 }}>
+        <TouchableOpacity
+          onPress={() => setShowOnline(true)}
+          style={{ marginLeft: 10 }}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('groupMembers')}, ${onlineMembers.length} ${t('online')}`}
+          accessibilityHint="Doble toque para ver miembros conectados"
+        >
           <UsersRound color="#C7D2FE" size={20} />
           {onlineMembers.length > 0 && (
             <View style={styles.onlineDot} />
@@ -640,7 +652,14 @@ export default function ChatScreen({ route, navigation }) {
             },
           ]}
         >
-          <TouchableOpacity style={styles.attachButton} onPress={() => setShowExtraMenu(true)}>
+          <TouchableOpacity
+            style={styles.attachButton}
+            onPress={() => setShowExtraMenu(true)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Menú de opciones"
+            accessibilityHint="Doble toque para abrir encuestas y ruleta"
+          >
             <MoreVertical color={theme.textMuted} size={22} />
           </TouchableOpacity>
           <View style={[styles.inputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
@@ -649,7 +668,7 @@ export default function ChatScreen({ route, navigation }) {
               style={[styles.textInput, { color: theme.text }]}
               onChangeText={(text) => {
                 inputValueRef.current = text;
-                sendAnim.setValue(text.trim().length > 0 ? 1 : 0);
+                setHasText(text.trim().length > 0);
               }}
               placeholder={t('writeMessage')}
               placeholderTextColor={theme.textMuted}
@@ -661,14 +680,16 @@ export default function ChatScreen({ route, navigation }) {
               underlineColorAndroid="transparent"
               autoCorrect={false}
             />
-            <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
+            <TouchableOpacity
+              onPress={handleSend}
+              style={styles.sendButton}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={t('send') || 'Enviar mensaje'}
+              accessibilityHint="Doble toque para enviar el mensaje"
+            >
               <View style={styles.sendIconContainer}>
-                <Animated.View style={[{ position: "absolute" }, { opacity: sendAnim }]}>
-                  <Send color="#4F46E5" size={20} />
-                </Animated.View>
-                <Animated.View style={{ opacity: sendAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
-                  <Send color="#9CA3AF" size={20} />
-                </Animated.View>
+                <Send color={hasText ? "#4F46E5" : "#9CA3AF"} size={20} />
               </View>
             </TouchableOpacity>
           </View>
@@ -682,6 +703,7 @@ export default function ChatScreen({ route, navigation }) {
         animationType="slide"
         statusBarTranslucent
         onRequestClose={() => setActionMsg(null)}
+        accessibilityViewIsModal={true}
       >
         <TouchableOpacity
           style={styles.actionOverlay}
@@ -718,6 +740,7 @@ export default function ChatScreen({ route, navigation }) {
         animationType="fade"
         statusBarTranslucent
         onRequestClose={() => setEditingMsg(null)}
+        accessibilityViewIsModal={true}
       >
         <View style={styles.editOverlay}>
           <View style={[styles.editCard, { backgroundColor: theme.card }]}>
@@ -758,6 +781,7 @@ export default function ChatScreen({ route, navigation }) {
         animationType="fade"
         statusBarTranslucent
         onRequestClose={() => setShowOnline(false)}
+        accessibilityViewIsModal={true}
       >
         <TouchableOpacity
           style={styles.onlineOverlay}
@@ -821,7 +845,7 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
       {/* Menú extra (3 puntos) */}
-      <Modal visible={showExtraMenu} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowExtraMenu(false)}>
+      <Modal visible={showExtraMenu} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowExtraMenu(false)} accessibilityViewIsModal={true}>
         <TouchableOpacity style={styles.actionOverlay} activeOpacity={1} onPress={() => setShowExtraMenu(false)}>
           <View style={[styles.actionSheet, { backgroundColor: theme.card }]}>
             <View style={[styles.actionHandle, { backgroundColor: theme.border }]} />
@@ -843,7 +867,7 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
       {/* Modal encuesta */}
-      <Modal visible={showPollModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowPollModal(false)}>
+      <Modal visible={showPollModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowPollModal(false)} accessibilityViewIsModal={true}>
         <View style={styles.editOverlay}>
           <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "80%" }]}>
             <View style={styles.modalTitleRow}>
@@ -901,7 +925,7 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
       {/* Modal ruleta */}
-      <Modal visible={showRouletteModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => { if (!rouletteSpinning) setShowRouletteModal(false); }}>
+      <Modal visible={showRouletteModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => { if (!rouletteSpinning) setShowRouletteModal(false); }} accessibilityViewIsModal={true}>
         <View style={styles.editOverlay}>
           <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "90%" }]}>
             {/* Header */}

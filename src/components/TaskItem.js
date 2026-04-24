@@ -6,12 +6,13 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import Text from './AppText';
-import { CheckSquare, Clock, Users, AlertCircle, Pencil } from 'lucide-react-native';
+import SwipeableRow from './SwipeableRow';
+import { CheckSquare, Clock, Users, AlertCircle, Pencil, Trash2 } from 'lucide-react-native';
 import { isOverdue, formatDate } from '../utils/dateUtils';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAccessibility } from '../contexts/AccessibilityContext';
 
-export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, isLeader }) {
+export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, onDelete, isLeader }) {
   const { theme, isDark } = useTheme();
   const { t } = useAccessibility();
   const isCompleted = task.status === 'Completada';
@@ -36,7 +37,18 @@ export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, i
     return { backgroundColor: 'transparent', borderColor: '#D1D5DB' };
   };
 
-  return (
+  const swipeActions = isLeader && onDelete
+    ? [
+        {
+          icon: <Trash2 color="#FFFFFF" size={20} />,
+          label: t('delete') || 'Eliminar',
+          bgColor: '#DC2626',
+          onPress: () => onDelete(task.id, task.title),
+        },
+      ]
+    : [];
+
+  const content = (
     <View style={[styles.container, { borderColor: getBorderColor(), backgroundColor: getBgColor() }]}>
       {/* Checkbox */}
       <TouchableOpacity
@@ -112,6 +124,12 @@ export default function TaskItem({ task, assigneeName, onToggleStatus, onEdit, i
       </View>
     </View>
   );
+
+  if (swipeActions.length > 0) {
+    return <SwipeableRow actions={swipeActions}>{content}</SwipeableRow>;
+  }
+
+  return content;
 }
 
 const styles = StyleSheet.create({

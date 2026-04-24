@@ -1,5 +1,8 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAccessibility } from './AccessibilityContext';
+
+const THEME_STORAGE_KEY = '@studysync_theme';
 
 const light = {
   dark: false,
@@ -54,6 +57,18 @@ const ThemeContext = createContext(null);
 export const ThemeProvider = ({ children }) => {
   const [isDark, setIsDark] = useState(false);
 
+  // Cargar preferencia guardada
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        if (saved !== null) setIsDark(saved === 'true');
+      } catch (e) {
+        console.warn('Error loading theme preference:', e);
+      }
+    })();
+  }, []);
+
   // Access Accessibility Context to check if contrast mode is on
   // Safe fallback if ThemeProvider is used without AccessibilityProvider
   let isHighContrast = false;
@@ -71,7 +86,13 @@ export const ThemeProvider = ({ children }) => {
     theme = dark;
   }
 
-  const toggleTheme = () => setIsDark((prev) => !prev);
+  const toggleTheme = () => {
+    setIsDark((prev) => {
+      const next = !prev;
+      AsyncStorage.setItem(THEME_STORAGE_KEY, String(next)).catch(() => {});
+      return next;
+    });
+  };
 
   return (
     <ThemeContext.Provider value={{ theme, isDark, toggleTheme }}>

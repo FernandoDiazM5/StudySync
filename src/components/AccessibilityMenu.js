@@ -203,8 +203,8 @@ export default function AccessibilityMenu() {
                     try {
                       const lang = language === 'en' ? 'en' : 'es';
                       const msg = language === 'en'
-                        ? 'Narrator enabled. Long press any text to hear it.'
-                        : 'Narrador activado. Mantén presionado cualquier texto para escucharlo.';
+                        ? 'Narrator enabled. Use TalkBack or VoiceOver to navigate. Long press elements to hear them.'
+                        : 'Narrador activado. Usa TalkBack o VoiceOver para navegar. Mantén presionado para escuchar.';
                       Speech.speak(msg, { language: lang });
                     } catch (e) {
                       console.warn('Speech error on enable:', e);

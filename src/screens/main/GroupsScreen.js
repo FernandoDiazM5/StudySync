@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import Text from "../../components/AppText";
 import GroupAvatar from "../../components/GroupAvatar";
+import SwipeableRow from "../../components/SwipeableRow";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -27,6 +28,9 @@ import {
   Check,
   X,
   UsersRound,
+  MessageSquare,
+  Trash2,
+  LogOut,
 } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -138,6 +142,48 @@ export default function GroupsScreen({ navigation }) {
       (g.desc && g.desc.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
+  const handleDeleteGroup = (group) => {
+    Alert.alert(
+      t('confirm') || 'Confirmar',
+      `¿Estás seguro de que deseas eliminar el grupo "${group.name}"? Se borrarán todos los mensajes, tareas y archivos.`,
+      [
+        { text: t('cancel') || 'Cancelar', style: 'cancel' },
+        {
+          text: t('delete') || 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await firestoreService.deleteGroup(group.id);
+            } catch (e) {
+              Alert.alert('Error', 'No se pudo eliminar el grupo');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLeaveGroup = (group) => {
+    Alert.alert(
+      t('confirm') || 'Confirmar',
+      `¿Deseas salir del grupo "${group.name}"?`,
+      [
+        { text: t('cancel') || 'Cancelar', style: 'cancel' },
+        {
+          text: 'Salir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await firestoreService.leaveGroup(group.id, user.uid);
+            } catch (e) {
+              Alert.alert('Error', 'No se pudo salir del grupo');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderGroupCard = ({ item: group }) => {
     const tasks = groupTasks[group.id] || [];
     const pendingTasks = tasks.filter(
@@ -150,79 +196,105 @@ export default function GroupsScreen({ navigation }) {
     const progressPercentage =
       totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
+    const isLeader = group.leaderId === user?.uid;
+
+    const swipeActions = [
+      {
+        icon: <MessageSquare color="#FFFFFF" size={20} />,
+        label: 'Chat',
+        bgColor: '#4F46E5',
+        onPress: () => navigation.navigate("Chat", { groupId: group.id }),
+      },
+      isLeader
+        ? {
+            icon: <Trash2 color="#FFFFFF" size={20} />,
+            label: t('delete') || 'Eliminar',
+            bgColor: '#DC2626',
+            onPress: () => handleDeleteGroup(group),
+          }
+        : {
+            icon: <LogOut color="#FFFFFF" size={20} />,
+            label: 'Salir',
+            bgColor: '#D97706',
+            onPress: () => handleLeaveGroup(group),
+          },
+    ];
+
     return (
-      <TouchableOpacity
-        style={[styles.groupCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-        onPress={() =>
-          navigation.navigate("GroupDetails", { groupId: group.id })
-        }
-        activeOpacity={0.7}
-        accessible={true}
-        accessibilityRole="button"
-        accessibilityLabel={`Grupo: ${group.name}`}
-        accessibilityHint="Doble toque para ver el detalle del grupo"
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardContent}>
-            <Text
-              style={[styles.groupName, { color: theme.text }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {group.name}
-            </Text>
-            <Text style={[styles.groupDesc, { color: theme.textSecondary }]}>{group.desc}</Text>
-
-            <View style={styles.badgeContainer}>
-              {pendingTasks.length > 0 ? (
-                <View style={styles.pendingBadge}>
-                  <Clock color="#D97706" size={12} />
-                  <Text style={styles.pendingText}>
-                    {`${pendingTasks.length} ${t('pendingTasksBadge')}`}
-                  </Text>
-                </View>
-              ) : totalTasks === 0 ? (
-                <View style={styles.notStartedBadge}>
-                  <Clock color="#6B7280" size={12} />
-                  <Text style={styles.notStartedText}>{t('workNotStarted')}</Text>
-                </View>
-              ) : (
-                <View style={styles.completedBadge}>
-                  <CheckSquare color="#16A34A" size={12} />
-                  <Text style={styles.completedText}>{t('workUpToDate')}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          <GroupAvatar
-            photoURL={group.photoURL}
-            name={group.name}
-            size={44}
-            borderRadius={12}
-            showInitials={true}
-          />
-        </View>
-
-        {totalTasks > 0 && (
-          <View style={styles.progressSection}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressLabel}>{t('workProgress')}</Text>
-              <Text style={styles.progressValue}>
-                {progressPercentage}% ({completedTasks}/{totalTasks})
+      <SwipeableRow actions={swipeActions}>
+        <TouchableOpacity
+          style={[styles.groupCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+          onPress={() =>
+            navigation.navigate("GroupDetails", { groupId: group.id })
+          }
+          activeOpacity={0.7}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={`Grupo: ${group.name}`}
+          accessibilityHint="Doble toque para ver el detalle del grupo. Desliza a la izquierda para más opciones"
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.cardContent}>
+              <Text
+                style={[styles.groupName, { color: theme.text }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {group.name}
               </Text>
+              <Text style={[styles.groupDesc, { color: theme.textSecondary }]}>{group.desc}</Text>
+
+              <View style={styles.badgeContainer}>
+                {pendingTasks.length > 0 ? (
+                  <View style={styles.pendingBadge}>
+                    <Clock color="#D97706" size={12} />
+                    <Text style={styles.pendingText}>
+                      {`${pendingTasks.length} ${t('pendingTasksBadge')}`}
+                    </Text>
+                  </View>
+                ) : totalTasks === 0 ? (
+                  <View style={styles.notStartedBadge}>
+                    <Clock color="#6B7280" size={12} />
+                    <Text style={styles.notStartedText}>{t('workNotStarted')}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.completedBadge}>
+                    <CheckSquare color="#16A34A" size={12} />
+                    <Text style={styles.completedText}>{t('workUpToDate')}</Text>
+                  </View>
+                )}
+              </View>
             </View>
-            <View style={styles.progressBarBg}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  { width: `${progressPercentage}%` },
-                ]}
-              />
-            </View>
+
+            <GroupAvatar
+              photoURL={group.photoURL}
+              name={group.name}
+              size={44}
+              borderRadius={12}
+              showInitials={true}
+            />
           </View>
-        )}
-      </TouchableOpacity>
+
+          {totalTasks > 0 && (
+            <View style={styles.progressSection}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressLabel}>{t('workProgress')}</Text>
+                <Text style={styles.progressValue}>
+                  {progressPercentage}% ({completedTasks}/{totalTasks})
+                </Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    { width: `${progressPercentage}%` },
+                  ]}
+                />
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+      </SwipeableRow>
     );
   };
 

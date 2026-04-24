@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
+  Text as RNText,
   TextInput,
   StyleSheet,
   KeyboardAvoidingView,
@@ -34,7 +35,9 @@ import AppButton from "../../components/AppButton";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 
 const LETTERS = "StudySync".split("");
-const AnimatedAppText = Animated.createAnimatedComponent(Text);
+// Usar Animated.Text nativo (no AppText) para evitar conflicto
+// con la New Architecture de React Native
+const AnimatedNativeText = Animated.createAnimatedComponent(RNText);
 
 function WaveText() {
   const anims = useRef(LETTERS.map(() => new Animated.Value(0))).current;
@@ -67,12 +70,12 @@ function WaveText() {
       }}
     >
       {LETTERS.map((letter, i) => (
-        <AnimatedAppText
+        <AnimatedNativeText
           key={i}
           style={[styles.title, { transform: [{ translateY: anims[i] }] }]}
         >
           {letter}
-        </AnimatedAppText>
+        </AnimatedNativeText>
       ))}
     </View>
   );
