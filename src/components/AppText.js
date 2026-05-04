@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Text, StyleSheet } from 'react-native';
 import { useAccessibility } from '../contexts/AccessibilityContext';
 
@@ -17,15 +17,24 @@ const extractString = (node) => {
  * DISEÑO SEMÁNTICO:
  * - accessible={false} por defecto: el texto NO es un elemento independiente
  *   de TalkBack/VoiceOver. Esto evita que "robe" el doble-toque al AppButton padre.
- * - Cuando el narrador está activo, onLongPress lee el texto en voz alta.
  * - El padre (AppButton / View) es quien se declara como elemento accesible.
+ *
+ * COEXISTENCIA NARRADOR + BOTONES PADRE:
+ * - accessible={false} (dentro de botón): usa onTouchStart/onTouchEnd con timer
+ *   de 700 ms. Estos eventos son "pasivos" — no reclaman el responder, así que
+ *   el padre sigue recibiendo el tap normalmente. Mantener pulsado ≥700 ms activa
+ *   la lectura en voz alta.
+ * - accessible={true} (texto autónomo): usa onLongPress convencional. Es seguro
+ *   porque no hay botón padre que pueda perder el responder.
  *
  * Props especiales:
  *   isHeading   — marca el texto como cabecera (accessibilityRole="header")
- *   speakOnFocus — el texto se lee solo cuando es foco de TalkBack (requiere accessible={true} explícito)
  */
 export default function AppText({ style, children, isHeading, ...props }) {
   const accessibility = useAccessibility();
+
+  // speechTimerRef DEBE estar antes del early-return para respetar las reglas de Hooks
+  const speechTimerRef = useRef(null);
 
   // Fallback seguro si se usa fuera del provider
   if (!accessibility) {
@@ -56,9 +65,13 @@ export default function AppText({ style, children, isHeading, ...props }) {
     lineHeight: baseLineHeight * lineHeightMultiplier,
   };
 
-  // Long-press: solo activo cuando el narrador está habilitado
-  const handleLongPress = speechEnabled
+  const isExplicitlyAccessible = props.accessible === true;
+
+  // ─── Texto AUTÓNOMO (accessible={true}) ────────────────────────────────────
+  // onLongPress es seguro: no hay botón padre compitiendo por el responder.
+  const handleLongPress = (speechEnabled && isExplicitlyAccessible)
     ? (event) => {
+        clearTimeout(speechTimerRef.current);
         try {
           const text = extractString(children);
           if (text.trim().length > 0) speakText(text);
@@ -67,20 +80,51 @@ export default function AppText({ style, children, isHeading, ...props }) {
         }
         props.onLongPress?.(event);
       }
-    : props.onLongPress; // sin narrador → comportamiento original (o undefined)
+    : props.onLongPress;
+
+  // ─── Texto DENTRO DE BOTÓN (accessible={false}, default) ───────────────────
+  // onTouchStart/onTouchEnd son "pasivos": no reclaman el responder, por lo que
+  // el TouchableOpacity/Pressable padre sigue recibiendo el tap normalmente.
+  // Un timer de 700 ms distingue "mantener pulsado" (→ narrador) de "tap rápido".
+  const handleTouchStart = (speechEnabled && !isExplicitlyAccessible)
+    ? () => {
+        clearTimeout(speechTimerRef.current);
+        speechTimerRef.current = setTimeout(() => {
+          try {
+            const text = extractString(children);
+            if (text.trim().length > 0) speakText(text);
+          } catch (e) {
+            console.warn('[AppText] Speech (touch) error:', e);
+          }
+        }, 700);
+        props.onTouchStart?.();
+      }
+    : props.onTouchStart;
+
+  const handleTouchEnd = (speechEnabled && !isExplicitlyAccessible)
+    ? () => {
+        clearTimeout(speechTimerRef.current);
+        props.onTouchEnd?.();
+      }
+    : props.onTouchEnd;
 
   return (
     <Text
+      // Spread primero para que nuestros handlers sobreescriban cualquier valor
+      // que el consumer haya pasado para onLongPress/onTouchStart/onTouchEnd.
+      {...props}
       style={[style, customStyle]}
-      // ─── ACCESIBILIDAD ───────────────────────────────────────────────
+      // ─── NARRADOR ─────────────────────────────────────────────────────────
+      onLongPress={handleLongPress}
+      delayLongPress={(speechEnabled && isExplicitlyAccessible) ? 600 : props.delayLongPress}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      // ─── ACCESIBILIDAD ────────────────────────────────────────────────────
       // Por defecto accessible=false: el texto no es un nodo independiente
       // en el árbol de accesibilidad, así no interfiere con los botones padre.
-      // El consumer puede pasar accessible={true} explícitamente si necesita
-      // que el texto sea un elemento de foco (p.ej. párrafos autónomos).
-      onLongPress={handleLongPress}
-      delayLongPress={speechEnabled ? 600 : props.delayLongPress}
-      {...props}
-      // Re-aplicar DESPUÉS del spread para que no sean sobreescritos:
+      // El consumer puede pasar accessible={true} explícitamente para textos
+      // autónomos (párrafos, títulos de pantalla, etc.).
       accessible={props.accessible ?? false}
       accessibilityRole={
         props.accessible

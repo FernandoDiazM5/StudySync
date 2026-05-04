@@ -70,6 +70,92 @@ export const formatTime = (dateStr) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+/** Zona horaria de referencia para chat (Perú, UTC−5, sin DST). */
+export const CHAT_TIME_ZONE = 'America/Lima';
+
+/**
+ * Fecha civil YYYY-MM-DD en la zona indicada (p. ej. separadores de día en el chat).
+ * Evita usar el prefijo ISO en UTC (`split('T')[0]`), que desplaza el día en Perú.
+ */
+export const getCalendarDateKeyInTimeZone = (isoString, timeZone = CHAT_TIME_ZONE) => {
+  if (!isoString) return 'unknown';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return 'unknown';
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  } catch {
+    return String(isoString).split('T')[0] || 'unknown';
+  }
+};
+
+/** Hora en zona Perú (12 h, locale es-PE). */
+export const formatTimeInTimeZone = (isoString, timeZone = CHAT_TIME_ZONE) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat('es-PE', {
+      timeZone,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(d);
+  } catch {
+    return formatTime(isoString);
+  }
+};
+
+/** Resta un día civil a YYYY-MM-DD (solo aritmética de calendario gregoriano). */
+const prevCalendarDateKey = (ymd) => {
+  const parts = String(ymd).split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return ymd;
+  const [y, mo, d] = parts;
+  const u = new Date(Date.UTC(y, mo - 1, d, 12, 0, 0));
+  u.setUTCDate(u.getUTCDate() - 1);
+  const yy = u.getUTCFullYear();
+  const mm = String(u.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(u.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+};
+
+/**
+ * Etiqueta para chip de fecha en el chat ("Hoy", "Ayer", o fecha larga), según calendario en Perú.
+ */
+export const formatChatDateSeparatorLabel = (dateKeyYYYYMMDD, timeZone = CHAT_TIME_ZONE) => {
+  if (!dateKeyYYYYMMDD || dateKeyYYYYMMDD === 'unknown') return '';
+  const todayKey = getCalendarDateKeyInTimeZone(new Date().toISOString(), timeZone);
+  if (dateKeyYYYYMMDD === todayKey) return 'Hoy';
+  const yesterdayKey = prevCalendarDateKey(todayKey);
+  if (dateKeyYYYYMMDD === yesterdayKey) return 'Ayer';
+  const parts = dateKeyYYYYMMDD.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return dateKeyYYYYMMDD;
+  const [y, m, d] = parts;
+  const anchor = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const thisYear = Number(todayKey.slice(0, 4));
+  try {
+    if (y === thisYear) {
+      return new Intl.DateTimeFormat('es-PE', {
+        timeZone: 'UTC',
+        day: 'numeric',
+        month: 'long',
+      }).format(anchor);
+    }
+    return new Intl.DateTimeFormat('es-PE', {
+      timeZone: 'UTC',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(anchor);
+  } catch {
+    return dateKeyYYYYMMDD;
+  }
+};
+
 /**
  * Obtener fecha de hoy en formato YYYY-MM-DD
  */

@@ -8,9 +8,10 @@ import {
   View,
   Text as RNText,
   TextInput,
+  ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
+  Keyboard,
   ActivityIndicator,
   Alert,
   StatusBar,
@@ -28,7 +29,8 @@ const shadow = (color, opacity, radius, offsetY, elevation) =>
       elevation,
     },
   });
-import { BookOpen, Eye, EyeOff } from "lucide-react-native";
+import { Eye, EyeOff } from "lucide-react-native";
+import LogoApp from "../../../assets/logo_app.svg";
 import { signIn } from "../../services/authService";
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
@@ -88,6 +90,24 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const { t } = useAccessibility();
+  const scrollRef = useRef(null);
+  const [kbPad, setKbPad] = useState(0);
+
+  // Gestionar padding del teclado manualmente: sin KAV, sin timing issues.
+  // Cuando el teclado sube → añadir paddingBottom = altura del teclado.
+  // Cuando baja → quitar padding y volver al centro (y:0) en el next frame.
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKbPad(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      setKbPad(0);
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      });
+    });
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const handleLogin = async () => {
     setErrorMsg("");
@@ -107,16 +127,19 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#EEF2FF" />
-      <View style={styles.card}>
+      <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(24, kbPad) }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+        <View style={styles.card}>
         {/* Logo */}
-        <View style={styles.logoContainer}>
-          <BookOpen color="#FFFFFF" size={32} />
-        </View>
+        <LogoApp width={100} height={100} style={styles.logoImage} />
 
         <WaveText />
         <Text style={styles.subtitle}>
@@ -193,6 +216,15 @@ export default function LoginScreen({ navigation }) {
         </View>
 
         <AppButton
+          onPress={() => navigation.navigate("ForgotPassword")}
+          style={styles.forgotLink}
+          accessibilityLabel="Recuperar contraseña"
+          accessibilityHint="Doble toque para recuperar tu contraseña"
+        >
+          <Text style={styles.forgotText}>{t('forgotPassword')}</Text>
+        </AppButton>
+
+        <AppButton
           onPress={() => navigation.navigate("Register")}
           style={styles.registerLink}
           accessibilityLabel="Ir a registro"
@@ -200,8 +232,9 @@ export default function LoginScreen({ navigation }) {
         >
           <Text style={styles.registerText}>{t('register')}</Text>
         </AppButton>
-      </View>
-    </KeyboardAvoidingView>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -209,9 +242,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#EEF2FF",
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 24,
+    paddingVertical: 24,
   },
   card: {
     width: "100%",
@@ -223,20 +260,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...shadow("rgba(0,0,0,0.1)", 0.1, 12, 4, 8),
   },
-  logoContainer: {
-    width: 64,
-    height: 64,
-    backgroundColor: "#4F46E5",
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
+  logoImage: {
+    width: 100,
+    height: 100,
     marginBottom: 16,
-    ...shadow("rgba(79,70,229,0.3)", 0.3, 8, 4, 6),
   },
   title: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#1F2937",
+    color: "#4F46E5",
     marginBottom: 4,
   },
   subtitle: {
@@ -316,8 +348,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
   },
+  forgotLink: {
+    marginTop: 12,
+    paddingVertical: 6,
+  },
+  forgotText: {
+    fontSize: 12,
+    color: "#4F46E5",
+    fontWeight: "600",
+  },
   registerLink: {
-    marginTop: 24,
+    marginTop: 16,
     paddingVertical: 8,
   },
   registerText: {

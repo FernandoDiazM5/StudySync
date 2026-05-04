@@ -4,7 +4,7 @@
 // Vista principal de "Mis Grupos"
 // ============================================
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   TextInput,
@@ -13,7 +13,12 @@ import {
   StyleSheet,
   StatusBar,
   Alert,
+  Modal,
+  Pressable,
+  ActivityIndicator,
+  InteractionManager,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import Text from "../../components/AppText";
 import GroupAvatar from "../../components/GroupAvatar";
 import SwipeableRow from "../../components/SwipeableRow";
@@ -27,10 +32,13 @@ import {
   Mail,
   Check,
   X,
-  UsersRound,
+  SlidersHorizontal,
   MessageSquare,
   Trash2,
   LogOut,
+  Users,
+  AlertTriangle,
+  Crown,
 } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -42,9 +50,67 @@ import {
 } from "../../services/firestoreService";
 import * as firestoreService from "../../services/firestoreService";
 
-export default function GroupsScreen({ navigation }) {
-  const { user } = useAuth();
-  const { theme } = useTheme();
+// ── Paleta del indicador de riesgo — familia indigo/violet de la app ─────────
+// L1 suave → L4 violeta, coherente con #4F46E5 / #6366F1 / #7C3AED
+const RISK_PALETTE = [
+  { bar: '#818CF8', lightBg: '#EEF2FF', lightBorder: '#C7D2FE', darkBg: 'rgba(129,140,248,0.10)', darkBorder: 'rgba(129,140,248,0.22)' }, // bajo
+  { bar: '#6366F1', lightBg: '#E0E7FF', lightBorder: '#A5B4FC', darkBg: 'rgba(99,102,241,0.12)',  darkBorder: 'rgba(99,102,241,0.26)'  }, // medio
+  { bar: '#4F46E5', lightBg: '#EEF2FF', lightBorder: '#818CF8', darkBg: 'rgba(79,70,229,0.14)',   darkBorder: 'rgba(79,70,229,0.30)'   }, // alto
+  { bar: '#7C3AED', lightBg: '#EDE9FE', lightBorder: '#C4B5FD', darkBg: 'rgba(124,58,237,0.14)',  darkBorder: 'rgba(124,58,237,0.30)'  }, // crítico
+];
+
+/**
+ * Calcula el nivel de riesgo 0–4 del grupo usando una puntuación acumulada.
+ * Cada tarea activa suma puntos según cuántos días faltan para su vencimiento;
+ * el puntaje total determina el nivel, de modo que múltiples tareas próximas
+ * a vencer elevan el riesgo incluso si ninguna está en estado crítico.
+ *
+ *   Puntos por tarea:
+ *     Vencida          → +4   (sube a crítico de inmediato)
+ *     Hoy              → +3
+ *     Mañana           → +2
+ *     2–3 días         → +1
+ *     4–7 días         → +0.5
+ *     8–14 días        → +0.2
+ *     > 14 días        →  0   (no impacta)
+ *
+ *   Niveles (puntaje acumulado):
+ *     ≥ 4  → 4 crítico · ≥ 2  → 3 alto
+ *     ≥ 1  → 2 medio   · > 0  → 1 bajo   · 0 → oculto
+ */
+const getRiskLevel = (tasks) => {
+  const now   = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const active = tasks.filter(
+    (t) => t.status !== 'Completada' && t.dueDate && t.dueDate !== 'Sin fecha'
+  );
+  if (!active.length) return 0;
+
+  let score = 0;
+
+  active.forEach((task) => {
+    const [y, m, d] = task.dueDate.split('-').map(Number);
+    const daysLeft  = Math.floor((new Date(y, m - 1, d) - today) / 86400000);
+
+    if      (daysLeft < 0)   score += 4;
+    else if (daysLeft === 0) score += 3;
+    else if (daysLeft === 1) score += 2;
+    else if (daysLeft <= 3)  score += 1;
+    else if (daysLeft <= 7)  score += 0.5;
+    else if (daysLeft <= 14) score += 0.2;
+  });
+
+  if (score >= 3) return 4;  // vencida (4) o vence hoy (3) → crítico
+  if (score >= 2) return 3;  // vence mañana, o 2 tareas en 2-3 días → alto
+  if (score >= 1) return 2;  // vence en 2-3 días, o varias en la semana → medio
+  if (score >  0) return 1;  // alguna tarea en ≤14 días → bajo
+  return 0;
+};
+
+export default function GroupsScreen({ navigation, route }) {
+  const { user, userProfile } = useAuth();
+  const { theme, isDark } = useTheme();
   const { t } = useAccessibility();
   const insets = useSafeAreaInsets();
   const [groups, setGroups] = useState([]);
@@ -52,6 +118,64 @@ export default function GroupsScreen({ navigation }) {
   const [invitations, setInvitations] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('Todas');
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const flatListRef = useRef(null);
+  const [highlightInvitationId, setHighlightInvitationId] = useState(null);
+  // Almacena la función closeRow de la fila que está abierta en este momento.
+  // Cuando una nueva fila se abre, cerramos la anterior automáticamente.
+  const openRowCloseRef = useRef(null);
+
+  const handleRowOpen = useCallback((closeFn) => {
+    if (openRowCloseRef.current && openRowCloseRef.current !== closeFn) {
+      openRowCloseRef.current();
+    }
+    openRowCloseRef.current = closeFn;
+  }, []);
+
+  // Al abrir la pestaña desde una notificación de invitación: subir la lista y resaltar la fila.
+  useFocusEffect(
+    useCallback(() => {
+      if (!route?.params?.scrollToInvitations) return undefined;
+      const highlightId = route.params?.highlightInvitationId ?? null;
+      let cancelled = false;
+      let timer;
+
+      const run = () => {
+        if (cancelled) return;
+        if (highlightId) setHighlightInvitationId(highlightId);
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        navigation.setParams({
+          scrollToInvitations: undefined,
+          _ts: undefined,
+          highlightInvitationId: undefined,
+        });
+      };
+
+      const task = InteractionManager.runAfterInteractions(() => {
+        if (cancelled) return;
+        timer = setTimeout(run, 200);
+      });
+
+      return () => {
+        cancelled = true;
+        task.cancel?.();
+        if (timer) clearTimeout(timer);
+      };
+    }, [
+      navigation,
+      route?.params?.scrollToInvitations,
+      route?.params?._ts,
+      route?.params?.highlightInvitationId,
+    ]),
+  );
+
+  useEffect(() => {
+    if (!highlightInvitationId) return undefined;
+    const t = setTimeout(() => setHighlightInvitationId(null), 3500);
+    return () => clearTimeout(t);
+  }, [highlightInvitationId]);
 
   // CASCADA: Invitaciones pendientes del usuario
   useEffect(() => {
@@ -65,9 +189,25 @@ export default function GroupsScreen({ navigation }) {
 
   const handleAcceptInvitation = async (invitation) => {
     try {
-      await acceptInvitation(invitation.id, invitation.groupId, user.uid);
-      // El listener de getMyGroups detectará el nuevo grupo automáticamente.
+      // acceptInvitation hace el batch write Y retorna el objeto del grupo
+      // construido desde el snapshot guardado en la invitación, sin necesitar
+      // una lectura adicional al documento de grupo (evita posibles errores de
+      // reglas de seguridad antes de que el listener onSnapshot se re-evalúe).
+      const groupData = await acceptInvitation(invitation.id, invitation.groupId, user.uid);
+
+      // Mostrar el grupo de inmediato sin esperar al listener de Firestore.
+      // (El listener también actualizará eventualmente con los datos completos.)
+      if (groupData) {
+        setGroups((prev) =>
+          prev.find((g) => g.id === invitation.groupId)
+            ? prev
+            : [groupData, ...prev],
+        );
+        // Si había un filtro activo, resetearlo para que el grupo recién unido sea visible.
+        setStatusFilter('Todas');
+      }
     } catch (e) {
+      console.error('[handleAcceptInvitation]', e);
       Alert.alert("Error", e.message || "No se pudo aceptar la invitación");
     }
   };
@@ -136,11 +276,38 @@ export default function GroupsScreen({ navigation }) {
     };
   }, [user]);
 
-  const filteredGroups = groups.filter(
-    (g) =>
-      g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (g.desc && g.desc.toLowerCase().includes(searchQuery.toLowerCase())),
+  // Ordenar por fecha de unión del usuario (más reciente primero)
+  const sortedGroups = [...groups].sort((a, b) => {
+    const ta = a.membersJoinedAt?.[user?.uid] || a.createdAt || '';
+    const tb = b.membersJoinedAt?.[user?.uid] || b.createdAt || '';
+    return tb.localeCompare(ta);
+  });
+
+  // Helper: estado derivado de las tareas de un grupo
+  const getGroupStatus = (groupId) => {
+    const tasks = groupTasks[groupId] || [];
+    if (tasks.length === 0) return 'sin_tareas';
+    const pending = tasks.filter((t) => t.status === 'Pendiente' || t.status === 'En progreso').length;
+    return pending > 0 ? 'pendiente' : 'al_dia';
+  };
+
+  const STATUS_FILTERS = useMemo(
+    () => [
+      { key: 'Todas', label: t('all') },
+      { key: 'pendiente', label: t('groupsFilterWithPending') },
+      { key: 'al_dia', label: t('workUpToDate') },
+      { key: 'sin_tareas', label: t('workNotStarted') },
+    ],
+    [t],
   );
+
+  const filteredGroups = sortedGroups.filter((g) => {
+    const matchesSearch =
+      g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (g.desc && g.desc.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesStatus = statusFilter === 'Todas' || getGroupStatus(g.id) === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const handleDeleteGroup = (group) => {
     Alert.alert(
@@ -197,36 +364,56 @@ export default function GroupsScreen({ navigation }) {
       totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     const isLeader = group.leaderId === user?.uid;
+    const isPro = (userProfile?.plan || "free") === "personal";
+    const leaderHasPersonal =
+      (group.leaderPlan || "free") === "personal";
+    // Barra: tareas de este grupo; visible si tú tienes Personal o el líder de este grupo (no cruza datos con otros grupos).
+    const showProgressBar =
+      totalTasks > 0 && (isPro || leaderHasPersonal);
+    // Riesgo: solo líder suscrito (tu plan).
+    const riskLevel = isLeader && isPro ? getRiskLevel(tasks) : 0;
+    const riskPal = riskLevel > 0 ? RISK_PALETTE[riskLevel - 1] : null;
 
     const swipeActions = [
       {
-        icon: <MessageSquare color="#FFFFFF" size={20} />,
+        icon: <MessageSquare color="#FFFFFF" size={22} />,
         label: 'Chat',
         bgColor: '#4F46E5',
-        onPress: () => navigation.navigate("Chat", { groupId: group.id }),
+        onPress: () =>
+          navigation.navigate("Chat", {
+            groupId: group.id,
+            groupName: group.name,
+            groupPhotoURL: group.photoURL,
+          }),
       },
       isLeader
         ? {
-            icon: <Trash2 color="#FFFFFF" size={20} />,
+            icon: <Trash2 color="#FFFFFF" size={22} />,
             label: t('delete') || 'Eliminar',
-            bgColor: '#DC2626',
+            bgColor: '#312E81',
             onPress: () => handleDeleteGroup(group),
           }
         : {
-            icon: <LogOut color="#FFFFFF" size={20} />,
+            icon: <LogOut color="#FFFFFF" size={22} />,
             label: 'Salir',
-            bgColor: '#D97706',
+            bgColor: '#7C3AED',
             onPress: () => handleLeaveGroup(group),
           },
     ];
 
     return (
-      <SwipeableRow actions={swipeActions}>
+      <SwipeableRow actions={swipeActions} onOpen={handleRowOpen}>
         <TouchableOpacity
-          style={[styles.groupCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-          onPress={() =>
-            navigation.navigate("GroupDetails", { groupId: group.id })
-          }
+          style={[
+            styles.groupCard,
+            { backgroundColor: theme.card, borderColor: theme.border },
+            isLeader && styles.groupCardLeader,
+          ]}
+          onPress={() => {
+            openRowCloseRef.current?.();
+            openRowCloseRef.current = null;
+            navigation.navigate("GroupDetails", { groupId: group.id });
+          }}
           activeOpacity={0.7}
           accessible={true}
           accessibilityRole="button"
@@ -235,14 +422,19 @@ export default function GroupsScreen({ navigation }) {
         >
           <View style={styles.cardHeader}>
             <View style={styles.cardContent}>
-              <Text
-                style={[styles.groupName, { color: theme.text }]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {group.name}
-              </Text>
-              <Text style={[styles.groupDesc, { color: theme.textSecondary }]}>{group.desc}</Text>
+              <View style={styles.groupNameRow}>
+                {isLeader && (
+                  <Crown size={13} color="#4F46E5" strokeWidth={2.2} />
+                )}
+                <Text
+                  style={[styles.groupName, { color: theme.text }, isLeader && { color: theme.dark ? '#A5B4FC' : '#3730A3' }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {group.name}
+                </Text>
+              </View>
+              <Text style={[styles.groupDesc, { color: theme.textSecondary }]} numberOfLines={2} ellipsizeMode="tail">{group.desc}</Text>
 
               <View style={styles.badgeContainer}>
                 {pendingTasks.length > 0 ? (
@@ -271,23 +463,44 @@ export default function GroupsScreen({ navigation }) {
               name={group.name}
               size={44}
               borderRadius={12}
-              showInitials={true}
             />
           </View>
 
-          {totalTasks > 0 && (
+          {showProgressBar && (
             <View style={styles.progressSection}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>{t('workProgress')}</Text>
-                <Text style={styles.progressValue}>
-                  {progressPercentage}% ({completedTasks}/{totalTasks})
-                </Text>
+                <Text style={[styles.progressLabel, { color: theme.textSecondary }]} numberOfLines={1}>{t('workProgress')}</Text>
+                <View style={styles.progressHeaderRight}>
+                  {riskLevel > 0 && (
+                    <View style={[
+                      styles.riskBadge,
+                      riskLevel === 4
+                        ? { backgroundColor: riskPal.bar, borderColor: riskPal.bar }
+                        : {
+                            backgroundColor: theme.dark ? riskPal.darkBg  : riskPal.lightBg,
+                            borderColor:     theme.dark ? riskPal.darkBorder : riskPal.lightBorder,
+                          },
+                    ]}>
+                      <AlertTriangle
+                        color={riskLevel === 4 ? '#FFF' : riskPal.bar}
+                        size={13 + riskLevel}
+                        strokeWidth={2.2}
+                      />
+                    </View>
+                  )}
+                  <Text style={[styles.progressValue, { color: theme.text }, progressPercentage === 100 && { color: '#16A34A' }]} numberOfLines={1}>
+                    {progressPercentage}% ({completedTasks}/{totalTasks})
+                  </Text>
+                </View>
               </View>
               <View style={styles.progressBarBg}>
                 <View
                   style={[
                     styles.progressBarFill,
-                    { width: `${progressPercentage}%` },
+                    {
+                      width: `${progressPercentage}%`,
+                      backgroundColor: progressPercentage === 100 ? '#16A34A' : '#4F46E5',
+                    },
                   ]}
                 />
               </View>
@@ -310,30 +523,95 @@ export default function GroupsScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Search */}
+      {/* Search + Filter */}
       <View style={[styles.searchContainer, { backgroundColor: theme.bg }]}>
-        <View style={[styles.searchInputWrapper, { backgroundColor: theme.input, borderColor: theme.inputBorder }]}>
-          <Search color={theme.textMuted} size={16} style={styles.searchIcon} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.text }]}
-            placeholder={t('searchGroup')}
-            placeholderTextColor={theme.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            accessibilityLabel="Buscar grupo"
-            accessibilityHint="Escribe el nombre del grupo que buscas"
-          />
+        <View style={styles.searchRow}>
+          <View style={[styles.searchInputWrapper, { backgroundColor: theme.input, borderColor: theme.inputBorder, flex: 1 }]}>
+            <Search color={theme.textMuted} size={16} style={styles.searchIcon} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder={t('searchGroup')}
+              placeholderTextColor={theme.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              accessibilityLabel="Buscar grupo"
+              accessibilityHint="Escribe el nombre del grupo que buscas"
+            />
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.filterBtn,
+              { backgroundColor: statusFilter !== 'Todas' ? '#4F46E5' : theme.input, borderColor: statusFilter !== 'Todas' ? '#4F46E5' : theme.inputBorder },
+            ]}
+            onPress={() => setFilterOpen(true)}
+            activeOpacity={0.75}
+            accessibilityLabel="Filtrar grupos"
+          >
+            <SlidersHorizontal color={statusFilter !== 'Todas' ? '#FFF' : theme.textMuted} size={18} />
+          </TouchableOpacity>
         </View>
+
+        {/* Chip activo cuando hay filtro */}
+        {statusFilter !== 'Todas' && (
+          <View style={styles.activeFilterRow}>
+            <View style={[styles.activeChip, { backgroundColor: '#EEF2FF', borderColor: '#A5B4FC' }]}>
+              <Text style={styles.activeChipText}>
+                {STATUS_FILTERS.find((f) => f.key === statusFilter)?.label}
+              </Text>
+              <TouchableOpacity onPress={() => setStatusFilter('Todas')} hitSlop={8}>
+                <X color="#4F46E5" size={13} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
+      {/* Filter Modal */}
+      <Modal
+        visible={filterOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setFilterOpen(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setFilterOpen(false)}>
+          <Pressable style={[styles.filterSheet, { backgroundColor: theme.card, paddingBottom: Math.max(16, insets.bottom) }]} onPress={() => {}}>
+            <Text style={[styles.filterSheetTitle, { color: theme.text }]}>{t('filterByGroupStatus')}</Text>
+            {STATUS_FILTERS.map((f) => {
+              const active = statusFilter === f.key;
+              return (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[styles.filterOption, active && { backgroundColor: '#EEF2FF' }]}
+                  onPress={() => { setStatusFilter(f.key); setFilterOpen(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterOptionText, { color: active ? '#4F46E5' : theme.text }, active && { fontWeight: '700' }]}>
+                    {f.label}
+                  </Text>
+                  {active && <Check color="#4F46E5" size={16} />}
+                </TouchableOpacity>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Groups List */}
-      <FlatList
+      {loading ? (
+        <View style={styles.loadingCenter}>
+          <ActivityIndicator color="#4F46E5" size="large" />
+        </View>
+      ) : <FlatList
+        ref={flatListRef}
         data={filteredGroups}
         keyExtractor={(item) => item.id}
         renderItem={renderGroupCard}
+        extraData={groupTasks}
         contentContainerStyle={[
           styles.listContainer,
           {
+            flexGrow: 1,
             paddingBottom: Math.max(
               styles.listContainer.paddingBottom,
               insets.bottom + 100,
@@ -343,7 +621,10 @@ export default function GroupsScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           invitations.length > 0 ? (
-            <View style={styles.invitationsSection}>
+            <View style={[
+                styles.invitationsSection,
+                isDark && { backgroundColor: 'rgba(79,70,229,0.15)', borderColor: '#4338CA' },
+              ]}>
               <View style={styles.invitationsHeader}>
                 <Mail color="#4F46E5" size={16} />
                 <Text style={[styles.invitationsTitle, { color: theme.text }]}>
@@ -351,18 +632,37 @@ export default function GroupsScreen({ navigation }) {
                 </Text>
               </View>
               {invitations.map((inv) => (
-                <View key={inv.id} style={[styles.invitationCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View
+                  key={inv.id}
+                  style={[
+                    styles.invitationCard,
+                    { backgroundColor: theme.card, borderColor: theme.border },
+                    highlightInvitationId === inv.id && {
+                      borderWidth: 2,
+                      borderColor: '#4F46E5',
+                      shadowColor: '#4F46E5',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.35,
+                      shadowRadius: 6,
+                      elevation: 4,
+                    },
+                  ]}
+                >
                   <View style={styles.invitationContent}>
-                    <Text style={styles.invitationGroupName}>
+                    <Text style={[styles.invitationGroupName, { color: theme.text }]}>
                       {inv.groupName}
                     </Text>
-                    <Text style={styles.invitationText}>
-                      {inv.invitedByName || t('someoneInvited')} te invitó a unirte
+                    <Text style={[styles.invitationText, { color: theme.textMuted }]}>
+                      {t('invitationInviteLine', { who: inv.invitedByName || t('someoneInvited') })}
                     </Text>
                   </View>
                   <View style={styles.invitationActions}>
                     <TouchableOpacity
-                      style={[styles.invitationBtn, styles.declineBtn]}
+                      style={[
+                        styles.invitationBtn,
+                        styles.declineBtn,
+                        isDark && { backgroundColor: 'rgba(220,38,38,0.18)', borderColor: 'rgba(220,38,38,0.45)' },
+                      ]}
                       onPress={() => handleDeclineInvitation(inv.id)}
                       activeOpacity={0.7}
                       accessible={true}
@@ -391,21 +691,41 @@ export default function GroupsScreen({ navigation }) {
         }
         ListEmptyComponent={
           !loading && (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
+            <View style={styles.emptyState}>
+              <Users color={theme.textMuted} size={52} />
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>
+                {searchQuery ? 'Sin resultados' : 'Sin grupos'}
+              </Text>
+              <Text style={[styles.emptyHint, { color: theme.textMuted }]}>
                 {searchQuery
-                  ? `${t('search')}: "${searchQuery}" - ${t('noGroupsYet')}`
-                  : t('noGroupsYet')}
+                  ? `No se encontraron grupos para "${searchQuery}".`
+                  : 'Crea un grupo de estudio o acepta una invitación para comenzar.'}
               </Text>
             </View>
           )
         }
-      />
+      />}
 
       {/* FAB - Create Group */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate("CreateGroup")}
+        onPress={() => {
+          const isFree = (userProfile?.plan || 'free') === 'free';
+          // Solo grupos que tú creas (líder): unirte por invitación no cuenta para el límite de 3.
+          const activeLedGroupsCount = groups.filter(
+            (g) =>
+              g.status !== 'Completada' && g.leaderId === user?.uid,
+          ).length;
+          if (isFree && activeLedGroupsCount >= 3) {
+            Alert.alert(
+              t('limitReachedTitle'),
+              t('freePlanMaxActiveGroupsMessage'),
+              [{ text: t('understood'), style: 'cancel' }],
+            );
+            return;
+          }
+          navigation.navigate("CreateGroup");
+        }}
         activeOpacity={0.8}
         accessible={true}
         accessibilityRole="button"
@@ -423,6 +743,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F9FAFB",
     position: "relative",
+  },
+  loadingCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     backgroundColor: "#4F46E5",
@@ -445,9 +770,15 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     padding: 16,
+    paddingBottom: 12,
     backgroundColor: "#F9FAFB",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   searchInputWrapper: {
     flexDirection: "row",
@@ -467,10 +798,65 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#1F2937",
   },
+  filterBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activeFilterRow: {
+    flexDirection: "row",
+    marginTop: 8,
+  },
+  activeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  activeChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4F46E5",
+  },
+  // Filter modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  filterSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 32,
+    gap: 4,
+  },
+  filterSheetTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  filterOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  filterOptionText: {
+    fontSize: 14,
+  },
   listContainer: {
     padding: 16,
     paddingBottom: 100,
-    gap: 12,
+    gap: 10,
   },
   groupCard: {
     backgroundColor: "#FFFFFF",
@@ -483,7 +869,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
-    marginBottom: 12,
+  },
+  // Cuando el usuario es líder del grupo — borde top con acento indigo
+  groupCardLeader: {
+    borderTopWidth: 2,
+    borderTopColor: '#4F46E5',
   },
   cardHeader: {
     flexDirection: "row",
@@ -499,6 +889,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#1F2937",
+    flex: 1,
   },
   groupDesc: {
     fontSize: 12,
@@ -512,8 +903,7 @@ const styles = StyleSheet.create({
   groupNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
+    gap: 5,
   },
   statusBadge: {
     borderRadius: 20,
@@ -612,6 +1002,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: "#4B5563",
+    flex: 1,
   },
   progressValue: {
     fontSize: 11,
@@ -691,14 +1082,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FCA5A5",
   },
-  emptyContainer: {
-    alignItems: "center",
-    paddingTop: 40,
+  // Columna derecha del card (solo avatar)
+  cardRight: {
+    alignItems: 'center',
   },
-  emptyText: {
-    fontSize: 14,
-    color: "#6B7280",
+  // Lado derecho del encabezado de progreso: icono de riesgo + porcentaje
+  progressHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 0,
   },
+  // Indicador de riesgo — triángulo de advertencia
+  riskBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  emptyHint:  { fontSize: 13, textAlign: 'center', lineHeight: 20 },
   fab: {
     position: "absolute",
     bottom: 24,

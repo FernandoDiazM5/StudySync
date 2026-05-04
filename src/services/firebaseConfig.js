@@ -3,9 +3,10 @@
 // ============================================
 
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configuración desde variables de entorno (.env) con fallback
 const firebaseConfig = {
@@ -20,10 +21,20 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 
-// Auth - Simplificado para evitar crash de React Native Persistence en nuevas v de Firebase
-const auth = getAuth(app);
+// Auth con persistencia en AsyncStorage:
+// - La sesión sobrevive a cierres desde el menú de recientes (swipe-to-kill)
+// - El try/catch protege contra doble inicialización en hot-reload de desarrollo
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+  });
+} catch {
+  // Ya inicializado (hot-reload) — reutilizar la instancia existente
+  auth = getAuth(app);
+}
 
-// Firestore - Simplificado para evitar crash 
+// Firestore
 const db = getFirestore(app);
 
 // Storage

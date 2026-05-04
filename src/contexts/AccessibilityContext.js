@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useMemo, useEffect } from 'react';
+import React, { createContext, useState, useContext, useMemo, useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as Speech from 'expo-speech';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,6 +17,12 @@ const STORAGE_KEY = '@studysync_accessibility';
 const translations = TRANSLATIONS;
 
 const AccessibilityContext = createContext(null);
+
+// Contexto separado y liviano SOLO para el estado open/close del sidebar.
+// Al mantenerlo aparte, abrir el menú NO re-renderiza AppText / AppButton
+// ni ningún otro consumidor del contexto principal, eliminando el lag de 300-500 ms
+// en dispositivos lentos.
+const MenuOpenContext = createContext({ isMenuOpen: false, setIsMenuOpen: () => {} });
 
 export const AccessibilityProvider = ({ children }) => {
   // Estados de Configuración
@@ -71,16 +77,21 @@ export const AccessibilityProvider = ({ children }) => {
     })();
   }, [language, textLevel, contrastActive, dyslexiaFontActive, spacingLevel, speechEnabled, isLoaded]);
 
-  // Intérprete multiidioma con fallback a español
-  const t = (key) => {
-    if (translations[language] && translations[language][key]) {
-      return translations[language][key];
+  // Intérprete multiidioma con fallback a español.
+  // Opcional: segundo argumento { n: 3 } reemplaza {{n}} en la cadena.
+  const t = useCallback((key, vars) => {
+    const raw =
+      translations[language]?.[key] ??
+      translations.es?.[key] ??
+      key;
+    if (vars != null && typeof vars === 'object') {
+      return Object.keys(vars).reduce(
+        (acc, k) => acc.split(`{{${k}}}`).join(String(vars[k])),
+        String(raw),
+      );
     }
-    if (translations['es'] && translations['es'][key]) {
-      return translations['es'][key];
-    }
-    return key;
-  };
+    return raw;
+  }, [language]);
 
   // Calculados a inyectar globalmente
   const textScaleMultiplier = useMemo(() => {
@@ -110,7 +121,7 @@ export const AccessibilityProvider = ({ children }) => {
   const globalLetterSpacing = dyslexiaFontActive ? 1.5 : 0;
 
   // Speech Helper with error handling
-  const speakText = (text) => {
+  const speakText = useCallback((text) => {
     if (!speechEnabled || !text) return;
     try {
       Speech.stop().catch(() => {});
@@ -123,10 +134,10 @@ export const AccessibilityProvider = ({ children }) => {
     } catch (error) {
       console.error('Speech initialization failed:', error);
     }
-  };
+  }, [speechEnabled, language]);
 
   // Reset all accessibility settings
-  const resetAccessibility = () => {
+  const resetAccessibility = useCallback(() => {
     setLanguage('es');
     setTextLevel(0);
     setContrastActive(false);
@@ -138,31 +149,46 @@ export const AccessibilityProvider = ({ children }) => {
     } catch (error) {
       console.warn('Error stopping speech during reset:', error);
     }
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    language, setLanguage, t,
+    textLevel, setTextLevel,
+    contrastActive, setContrastActive,
+    dyslexiaFontActive, setDyslexiaFontActive,
+    spacingLevel, setSpacingLevel,
+    speechEnabled, setSpeechEnabled,
+    resetAccessibility,
+    speakText,
+
+    // Propiedades calculadas
+    textScaleMultiplier,
+    lineHeightMultiplier,
+    globalFontFamily,
+    globalLetterSpacing,
+  }), [
+    language, t,
+    textLevel, contrastActive, dyslexiaFontActive, spacingLevel, speechEnabled,
+    resetAccessibility, speakText,
+    textScaleMultiplier, lineHeightMultiplier, globalFontFamily, globalLetterSpacing,
+  ]);
+
+  // isMenuOpen vive en su propio useMemo para que el cambio SOLO
+  // dispare re-renders en AccessibilityMenu (useMenuOpen), no en AppText/AppButton.
+  const menuValue = useMemo(
+    () => ({ isMenuOpen, setIsMenuOpen }),
+    [isMenuOpen],
+  );
 
   return (
-    <AccessibilityContext.Provider
-      value={{
-        language, setLanguage, t,
-        textLevel, setTextLevel,
-        contrastActive, setContrastActive,
-        dyslexiaFontActive, setDyslexiaFontActive,
-        spacingLevel, setSpacingLevel,
-        speechEnabled, setSpeechEnabled,
-        isMenuOpen, setIsMenuOpen,
-        resetAccessibility,
-        speakText,
-
-        // Propiedades calculadas
-        textScaleMultiplier,
-        lineHeightMultiplier,
-        globalFontFamily,
-        globalLetterSpacing,
-      }}
-    >
-      {children}
-    </AccessibilityContext.Provider>
+    <MenuOpenContext.Provider value={menuValue}>
+      <AccessibilityContext.Provider value={contextValue}>
+        {children}
+      </AccessibilityContext.Provider>
+    </MenuOpenContext.Provider>
   );
 };
 
 export const useAccessibility = () => useContext(AccessibilityContext);
+// Hook liviano: solo re-renderiza cuando cambia el estado open/close del sidebar.
+export const useMenuOpen = () => useContext(MenuOpenContext);

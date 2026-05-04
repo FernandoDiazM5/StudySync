@@ -1,3 +1,87 @@
+# StudySync — Update Final
+
+**Autor:** Bryan Huaman
+**Plataforma:** React Native (Expo)
+**Fecha:** 27 de abril de 2026
+
+---
+
+## Correcciones de bugs
+
+### Grupos
+- **Invitación aceptada no aparecía en la lista** — `acceptInvitation` leía los datos del grupo tras el batch write, pero las reglas de seguridad de Firestore bloqueaban la lectura porque el listener aún no re-evaluaba la membresía. Solución: leer el snapshot de la invitación *antes* del batch y retornar el objeto del grupo construido desde esos datos, sin necesitar una lectura adicional al documento de grupo.
+
+### Chat — Menciones
+- **`@todos` no notificaba** — El estado `members` estaba vacío al momento del envío porque `getUsersByIds` es asíncrono. Solución: usar `group.members` (array de UIDs cargado con el grupo) como fuente de verdad.
+- **`@nombre` lanzaba TypeError** — `m.name.toLowerCase()` fallaba si algún perfil no tenía campo `name`. Solución: `(m.name || m.displayName || '').toLowerCase()`.
+- **Segunda mención no aparecía en el input** — `setNativeProps({ text })` en Android no dispara `onChangeText`, dejando `inputValueRef` y el valor nativo desfasados tras la primera inserción. Solución: convertir el `TextInput` a controlado con estado `inputText`; `handleSelectMention` usa `setInputText` en lugar de `setNativeProps`.
+- **Mensaje `@todos` decía "te mencionó"** — Al usar `@todos`, el cuerpo de la notificación ahora dice `"X mencionó a todos los integrantes"` en lugar de `"X te mencionó"`.
+
+### Chat — TypeError al abrir
+- **`Cannot read property 'length' of undefined`** — `messageList.length` en el array de dependencias de `useEffect` se evaluaba como `undefined` porque `messageList` (declarado con `useMemo` más abajo) es hoistado por Babel como `var = undefined`. Solución: cambiar la dependencia a `messages.length` (estado `useState`, definido al inicio).
+
+### Chat — Bottom sheets (filtro de grupos / menú 3 puntos)
+- **Contenido tapado por la barra de navegación del móvil** — Los action sheets tenían `paddingBottom` fijo. Solución: `paddingBottom: Math.max(16, insets.bottom)` usando `useSafeAreaInsets`, que refleja exactamente la altura de la barra de navegación del sistema en cada dispositivo.
+- **Demasiado espaciado en un dispositivo** — La fórmula anterior sumaba `+16` ó `+8` a `insets.bottom`, generando padding excesivo en dispositivos con gesture navigation grande (~44–50 px). Solución: usar `insets.bottom` directamente sin extra.
+
+### Notificaciones
+- **Outline gris al tocar una notificación de mención** — `Pressable` en Android activa el `StateListAnimator` nativo (que dibuja un overlay gris rectangular que ignora `borderRadius`) cuando la View tiene `elevation > 0`. Solución: eliminar `elevation` de `s.item` y reemplazar `Pressable` por `TouchableOpacity` con `onPressIn`/`onPressOut`.
+- **Borde izquierdo cortado en ítems no leídos** — Mezclar `borderWidth: 1` y `borderLeftWidth: 3` con `borderRadius: 12` rompe el renderizado de esquinas en React Native. Solución: pill de acento posicionado como hijo flex dentro de un `View` externo con `overflow: hidden`, eliminando cualquier mezcla de anchos de borde.
+- **Espacio fantasma en texto de notificación** — El texto del tiempo ("Ahora" → "1m") cambiaba el ancho de `itemRight`, provocando que `itemBody` se re-midiera pero dejara el espacio de la línea anterior. Solución: `width: 40` fijo en `itemRight` y `textAlign: 'right'` en el tiempo.
+
+### Archivos — Botón eliminar no visible en algunos dispositivos
+- **Botón de eliminar documento no se veía** — El motor Yoga en algunas versiones de Android ignora `flexShrink: 0` en contenedores anidados, colapsando los botones. Solución: `position: 'absolute'` en `fileActions` con `right: 12`, `top: 0`, `bottom: 0`, sacando los botones del flujo flex y garantizando visibilidad sin importar el motor de layout.
+- **Sin separación entre nombre del archivo y botones** — El `paddingRight` del card no sumaba margen de respiración entre el último botón y el texto. Solución: recalcular con gap de 8 px extra: `98 px` (líder) y `56 px` (miembro).
+
+### Barra de progreso de carga de documento
+- **Mostraba 125% y no llegaba al 100%** — En algunos Android, `XMLHttpRequest.upload.onprogress` emite `e.loaded > e.total` (quirk conocido), haciendo que `10 + round((loaded/total) * 80)` supere 90. Solución: clampear a `[10, 90]` en el callback XHR y a `[0, 100]` en el render del modal.
+
+---
+
+## Nuevas funcionalidades
+
+### Notificaciones — Tab de Menciones
+- Agregado el tipo `mention` como quinta pestaña en el header de notificaciones.
+- El tab bar usa `ScrollView` horizontal para acomodar las 5 pestañas sin apretarse.
+- Color de acento dinámico por tipo: índigo (menciones), violeta (invitaciones), ámbar (tareas), esmeralda (grupos).
+
+### Notificaciones — Indicador visual por tipo
+- Ítems no leídos: borde completo del color del tipo (`borderWidth: 2`) + pill de acento izquierdo de 4×36 px con `borderRadius: 4`, centrado verticalmente.
+- Ítems leídos: borde tenue `rgba` del color del tipo (22 % de opacidad) — nunca gris.
+- Al presionar: fondo tenue del tipo + borde de 2 px del color.
+- Navegación push (`mention`, `group`): el marcado como leído se retrasa 350 ms para que la transición arranque con el borde coloreado aún visible.
+
+### Foto de perfil de usuario
+- Botón de cámara sobre el avatar en `ProfileScreen`. Al tocarlo, abre el picker de imágenes del sistema.
+- La imagen se sube a Supabase Storage en `avatars/users/{uid}/photo.{ext}` con `upsert: true` (reemplaza la anterior).
+- La URL pública con cache-buster (`?t=timestamp`) se guarda en el perfil de Firestore y se refresca con `refreshProfile()`.
+- Mientras sube muestra `ActivityIndicator` en el círculo del avatar.
+
+### Avatar de miembros en Detalle de Grupo
+- La lista de miembros ahora muestra la foto de perfil si el usuario tiene `photoURL` en Firestore.
+- Si no tiene foto, se muestran las iniciales (máximo 2 letras) como antes.
+- El avatar creció de 32 → 40 px para mejor visibilidad. `overflow: 'hidden'` garantiza el recorte circular en Android.
+
+---
+
+## Archivos modificados
+
+| Archivo | Cambios principales |
+|---|---|
+| `src/screens/group/ChatScreen.js` | Fix @todos / @nombre, fix TypeError, input controlado para menciones, bottom sheet padding, `@todos` mensaje notificación |
+| `src/screens/group/GroupDetailsScreen.js` | Botón eliminar con `position: absolute`, paddingRight con gap, avatar miembros con foto/iniciales |
+| `src/screens/main/GroupsScreen.js` | Fix `acceptInvitation`, bottom sheet padding |
+| `src/screens/main/NotificationsScreen.js` | Tab menciones, ScrollView horizontal en tabs, pill de acento, `TouchableOpacity` en lugar de `Pressable`, eliminación de `elevation`, borde tenue para leídos, ancho fijo en tiempo |
+| `src/screens/main/ProfileScreen.js` | Foto de perfil: picker, upload, display con `Image` |
+| `src/contexts/FileStorageContext.js` | Añadido `uploadUserAvatar` |
+| `src/services/firestoreService.js` | `acceptInvitation` lee snapshot antes del batch y retorna objeto de grupo construido |
+
+---
+
+*StudySync — Colaboración académica, sin distracciones.*
+
+---
+
 # StudySync — Update 3.0
 
 **Autor:** Bryan Huaman Roque

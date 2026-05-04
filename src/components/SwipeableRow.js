@@ -4,16 +4,16 @@
 // Revela botones de acción al deslizar a la izquierda
 // ============================================
 
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback } from "react";
 import {
   View,
   Animated,
   PanResponder,
   TouchableOpacity,
   StyleSheet,
-} from 'react-native';
-import Text from './AppText';
-import { useTheme } from '../contexts/ThemeContext';
+} from "react-native";
+import Text from "./AppText";
+import { useTheme } from "../contexts/ThemeContext";
 
 /**
  * SwipeableRow — Envuelve cualquier contenido y revela botones al deslizar.
@@ -21,44 +21,52 @@ import { useTheme } from '../contexts/ThemeContext';
  * Props:
  *   actions: Array<{ icon: ReactNode, label: string, bgColor: string, onPress: () => void }>
  *   enabled: boolean (default true) — habilita/deshabilita el swipe
- *   actionWidth: number (default 72) — ancho de cada botón de acción
+ *   actionWidth: number (default 76) — ancho de cada botón de acción
+ *   onOpen: (closeFn) => void — llamado cuando la fila se abre; recibe la fn para cerrarla
  *   children: ReactNode — contenido visible de la fila
  */
 export default function SwipeableRow({
   children,
   actions = [],
   enabled = true,
-  actionWidth = 72,
+  actionWidth = 76,
+  onOpen,
 }) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpen = useRef(false);
+
+  // Ref que siempre apunta al array de actions más reciente.
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
 
   const totalActionsWidth = actions.length * actionWidth;
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Solo activar si el movimiento es horizontal y significativo
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
         if (!enabled || actions.length === 0) return false;
         return (
-          Math.abs(gestureState.dx) > 10 &&
-          Math.abs(gestureState.dx) > Math.abs(gestureState.dy * 1.5)
+          Math.abs(gestureState.dx) > 8 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy * 1.2)
+        );
+      },
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        if (!enabled || actions.length === 0) return false;
+        return (
+          Math.abs(gestureState.dx) > 8 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy * 1.2)
         );
       },
       onPanResponderGrant: () => {
-        // Detener cualquier animación en curso
         translateX.stopAnimation();
       },
       onPanResponderMove: (_, gestureState) => {
         const currentOffset = isOpen.current ? -totalActionsWidth : 0;
         let newX = currentOffset + gestureState.dx;
-
-        // No permitir deslizar a la derecha más allá de 0
         if (newX > 0) newX = 0;
-        // Limitar el deslizamiento máximo a la izquierda
         if (newX < -totalActionsWidth - 40) newX = -totalActionsWidth - 40;
-
         translateX.setValue(newX);
       },
       onPanResponderRelease: (_, gestureState) => {
@@ -67,54 +75,57 @@ export default function SwipeableRow({
         const threshold = totalActionsWidth * 0.3;
 
         if (!isOpen.current) {
-          // Estaba cerrado: ¿abrir?
-          if (finalX < -threshold || gestureState.vx < -0.5) {
-            openRow();
-          } else {
-            closeRow();
-          }
+          if (finalX < -threshold || gestureState.vx < -0.5) openRow();
+          else closeRow();
         } else {
-          // Estaba abierto: ¿cerrar?
-          if (finalX > -totalActionsWidth + threshold || gestureState.vx > 0.5) {
+          if (finalX > -totalActionsWidth + threshold || gestureState.vx > 0.5)
             closeRow();
-          } else {
-            openRow();
-          }
+          else openRow();
         }
       },
       onPanResponderTerminate: () => {
         closeRow();
       },
-    })
+      onPanResponderTerminationRequest: () => false,
+    }),
   ).current;
-
-  const openRow = useCallback(() => {
-    isOpen.current = true;
-    Animated.spring(translateX, {
-      toValue: -totalActionsWidth,
-      useNativeDriver: true,
-      bounciness: 4,
-      speed: 14,
-    }).start();
-  }, [totalActionsWidth]);
 
   const closeRow = useCallback(() => {
     isOpen.current = false;
+    // useNativeDriver: false — en Android, useNativeDriver:true desincroniza
+    // el hitbox de touch de la posición visual después de una animación,
+    // haciendo que la parte superior del card no responda a toques.
     Animated.spring(translateX, {
       toValue: 0,
-      useNativeDriver: true,
+      useNativeDriver: false,
       bounciness: 4,
       speed: 14,
     }).start();
   }, []);
 
-  const handleActionPress = useCallback((action) => {
-    closeRow();
-    // Ejecutar acción después de que la animación de cierre empiece
-    setTimeout(() => {
-      action.onPress?.();
-    }, 150);
-  }, [closeRow]);
+  const closeRowRef = useRef(closeRow);
+  closeRowRef.current = closeRow;
+
+  const openRow = useCallback(() => {
+    isOpen.current = true;
+    Animated.spring(translateX, {
+      toValue: -totalActionsWidth,
+      useNativeDriver: false,
+      bounciness: 4,
+      speed: 14,
+    }).start();
+    onOpen?.(closeRowRef.current);
+  }, [totalActionsWidth, onOpen]);
+
+  const handleActionPress = useCallback(
+    (index) => {
+      closeRow();
+      setTimeout(() => {
+        actionsRef.current[index]?.onPress?.();
+      }, 150);
+    },
+    [closeRow],
+  );
 
   if (!enabled || actions.length === 0) {
     return <>{children}</>;
@@ -122,29 +133,52 @@ export default function SwipeableRow({
 
   return (
     <View style={styles.container}>
-      {/* Botones de acción (detrás del contenido) */}
+      {/* Panel de acciones — queda detrás del contenido */}
       <View style={[styles.actionsContainer, { width: totalActionsWidth }]}>
-        {actions.map((action, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.actionButton,
-              { width: actionWidth, backgroundColor: action.bgColor || '#DC2626' },
-            ]}
-            onPress={() => handleActionPress(action)}
-            activeOpacity={0.8}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel={action.label}
-            accessibilityHint={`Doble toque para ${action.label.toLowerCase()}`}
-          >
-            {action.icon}
-            <Text style={styles.actionLabel}>{action.label}</Text>
-          </TouchableOpacity>
-        ))}
+        {/* Wrapper con overflow:hidden para recortar las esquinas redondeadas */}
+        <View style={styles.actionsWrapper}>
+          {actions.map((action, index) => {
+            const isFirst = index === 0;
+            const isLast = index === actions.length - 1;
+            const bgColor = action.bgColor || "#DC2626";
+
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.actionButton,
+                  { width: actionWidth, backgroundColor: bgColor },
+                  isFirst && styles.actionButtonFirst,
+                  isLast && styles.actionButtonLast,
+                  !isFirst && styles.actionButtonSep,
+                ]}
+                onPress={() => handleActionPress(index)}
+                activeOpacity={0.78}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                accessibilityHint={`Doble toque para ${action.label.toLowerCase()}`}
+              >
+                {/* Reflejo superior sutil para dar profundidad */}
+                <View style={styles.shineOverlay} />
+
+                {/* Overlay oscuro en dark mode */}
+                {isDark && <View style={StyleSheet.absoluteFill} />}
+
+                {/* Ícono */}
+                <View style={styles.iconWrap}>{action.icon}</View>
+
+                {/* Etiqueta */}
+                <Text style={styles.actionLabel} numberOfLines={1}>
+                  {action.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
-      {/* Contenido deslizable — fondo opaco para ocultar los botones */}
+      {/* Contenido deslizable */}
       <Animated.View
         style={[
           styles.contentContainer,
@@ -153,6 +187,7 @@ export default function SwipeableRow({
             transform: [{ translateX }],
           },
         ]}
+        collapsable={false}
         {...panResponder.panHandlers}
       >
         {children}
@@ -163,30 +198,78 @@ export default function SwipeableRow({
 
 const styles = StyleSheet.create({
   container: {
-    overflow: 'hidden',
-    position: 'relative',
+    overflow: "hidden",
+    position: "relative",
   },
+
+  // ── Panel de acciones ──────────────────────────────────────────
   actionsContainer: {
-    position: 'absolute',
+    position: "absolute",
     right: 0,
+    // top: 0, bottom: 8 → alineado exacto con el card (que tiene marginBottom: 8)
     top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'stretch',
+    bottom: 8,
+    paddingRight: 4,
+  },
+  actionsWrapper: {
+    flex: 1,
+    flexDirection: "row",
+    borderRadius: 10,
+    overflow: "hidden",
   },
   actionButton: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 4,
+    overflow: "hidden",
   },
+  actionButtonFirst: {
+    // sin estilo extra; las esquinas las maneja actionsWrapper
+  },
+  actionButtonLast: {
+    // sin estilo extra; las esquinas las maneja actionsWrapper
+  },
+  // Separador vertical muy sutil entre botones adyacentes
+  actionButtonSep: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: "rgba(255,255,255,0.25)",
+  },
+
+  // Reflejo superior para dar sensación de profundidad/glass
+  shineOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "45%",
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+
+  // Ícono dentro de un círculo con fondo semitransparente
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.20)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+  },
+
   actionLabel: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
+    letterSpacing: 0.3,
+    textShadowColor: "rgba(0,0,0,0.25)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  contentContainer: {
-    // backgroundColor se aplica dinámicamente desde theme.bg
-  },
+
+  // ── Contenido ────────────────────────────────────────────────
+  contentContainer: {},
 });

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAccessibility } from './AccessibilityContext';
 
@@ -15,6 +15,8 @@ const light = {
   input: '#F9FAFB',
   inputBorder: '#D1D5DB',
   headerBg: '#4F46E5',
+  /** expo-status-bar: 'light' = iconos/hora claros sobre cabecera oscura (el morado no es fondo claro). */
+  statusBarStyle: 'light',
   tabBg: '#FFFFFF',
   tabBorder: '#E5E7EB',
   divider: '#F3F4F6',
@@ -47,6 +49,7 @@ const highContrastDark = {
   input: '#000000',
   inputBorder: '#F59E0B',
   headerBg: '#111111',
+  statusBarStyle: 'light',
   tabBg: '#000000',
   tabBorder: '#D97706',
   divider: '#92400e',
@@ -86,16 +89,21 @@ export const ThemeProvider = ({ children }) => {
     theme = dark;
   }
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     setIsDark((prev) => {
       const next = !prev;
       AsyncStorage.setItem(THEME_STORAGE_KEY, String(next)).catch(() => {});
       return next;
     });
-  };
+  }, []);
+
+  const contextValue = useMemo(
+    () => ({ theme, isDark, toggleTheme }),
+    [theme, isDark, toggleTheme],
+  );
 
   return (
-    <ThemeContext.Provider value={{ theme, isDark, toggleTheme }}>
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   );

@@ -1,5 +1,6 @@
 // PROFILE SCREEN - StudySync (Migración L432-611)
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   TextInput,
@@ -7,6 +8,9 @@ import {
   StyleSheet,
   Alert,
   StatusBar,
+  Image,
+  ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
@@ -18,7 +22,7 @@ import {
   Lock,
   Bell,
   LogOut,
-  Edit3,
+  Camera,
   Settings,
   Phone,
   Moon,
@@ -26,20 +30,34 @@ import {
   Eye,
   EyeOff,
   Accessibility as AccessibilityIcon,
+  Crown,
 } from "lucide-react-native";
+import PlanMenu from "../../components/PlanMenu";
+import AccessibilityMenu from "../../components/AccessibilityMenu";
+import * as DocumentPicker from "expo-document-picker";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useAccessibility } from "../../contexts/AccessibilityContext";
+import {
+  useAccessibility,
+  useMenuOpen,
+} from "../../contexts/AccessibilityContext";
+import { useFileStorage } from "../../contexts/FileStorageContext";
 import { signOut, updatePassword } from "../../services/authService";
-import { updateUserProfile } from "../../services/firestoreService";
+import {
+  updateUserProfile,
+  syncLeaderPlanToGroups,
+  syncLeaderNameToGroups,
+} from "../../services/firestoreService";
 
 export default function ProfileScreen() {
   const { user, userProfile, refreshProfile } = useAuth();
   const { theme, isDark, toggleTheme } = useTheme();
+  const { uploadUserAvatar } = useFileStorage();
   const insets = useSafeAreaInsets();
   const [subView, setSubView] = useState("main");
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -47,9 +65,48 @@ export default function ProfileScreen() {
   const [showNewPwd, setShowNewPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [isPlanMenuOpen, setIsPlanMenuOpen] = useState(false);
 
-  // Accesibilidad
-  const { setIsMenuOpen, t } = useAccessibility();
+  // Plan
+  const currentPlan = userProfile?.plan || "free";
+  const currentBilling = userProfile?.planBilling || "monthly";
+  const isPro = currentPlan === "personal";
+
+  const { t } = useAccessibility();
+
+  // Al volver a la pestaña Perfil, refrescar Firestore (p. ej. cambios desde otro dispositivo)
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile?.();
+    }, [refreshProfile]),
+  );
+
+  const displayRole = useMemo(() => {
+    const r = (userProfile?.role || "").trim();
+    if (!r) return t("member");
+    const lower = r.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (lower === "miembro" || lower === "member") return t("member");
+    if (lower === "lider" || lower === "leader") return t("leader");
+    return r;
+  }, [userProfile?.role, t]);
+
+  const handleSelectPlan = useCallback(
+    async (plan, billing) => {
+      try {
+        await updateUserProfile(user.uid, { plan, planBilling: billing });
+        // Propagar el nuevo plan a todos los grupos que lidera este usuario
+        syncLeaderPlanToGroups(user.uid, plan).catch(() => {});
+        await refreshProfile();
+      } catch (e) {
+        Alert.alert(t("error"), t("cannotUpdate"));
+      }
+    },
+    [user?.uid, refreshProfile, t],
+  );
+
+  const closePlanMenu = useCallback(() => setIsPlanMenuOpen(false), []);
+
+  const { setIsMenuOpen } = useMenuOpen();
 
   // Sincronizar estado local cuando cambia userProfile
   useEffect(() => {
@@ -58,15 +115,15 @@ export default function ProfileScreen() {
   }, [userProfile]);
 
   const handleLogout = async () => {
-    Alert.alert("Cerrar Sesión", "¿Estás seguro?", [
-      { text: "Cancelar", style: "cancel" },
+    Alert.alert(t("logout"), t("logoutConfirm"), [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: "Cerrar Sesión",
+        text: t("logout"),
         style: "destructive",
         onPress: async () => {
           const result = await signOut();
           if (!result.success)
-            Alert.alert("Error", result.error || "No se pudo cerrar sesión.");
+            Alert.alert(t("error"), result.error || t("cannotLogout"));
         },
       },
     ]);
@@ -74,44 +131,71 @@ export default function ProfileScreen() {
 
   const handleProfileSubmit = async () => {
     if (!editName.trim()) {
-      Alert.alert("Error", "El nombre es obligatorio.");
+      Alert.alert(t("error"), t("nameRequired"));
       return;
     }
     try {
+      const trimmedName = editName.trim();
       await updateUserProfile(user.uid, {
-        name: editName.trim(),
+        name: trimmedName,
         phone: editPhone.trim(),
       });
+      // Propagar el nombre actualizado a los grupos donde este usuario es líder
+      syncLeaderNameToGroups(user.uid, trimmedName).catch(() => {});
       await refreshProfile();
-      Alert.alert("Éxito", "¡Información actualizada!");
+      Alert.alert(t("success"), t("infoUpdated"));
       setSubView("main");
     } catch (e) {
-      Alert.alert("Error", "No se pudo actualizar.");
+      Alert.alert(t("error"), t("cannotUpdate"));
     }
   };
 
   const handlePasswordSubmit = async () => {
     if (!currentPwd || !newPwd) {
-      Alert.alert("Error", "Completa todos los campos.");
+      Alert.alert(t("error"), t("completeAllFields"));
       return;
     }
     if (newPwd !== confirmPwd) {
-      Alert.alert("Error", "Las contraseñas no coinciden.");
+      Alert.alert(t("error"), t("passwordsDontMatch2"));
       return;
     }
     if (newPwd.length < 6) {
-      Alert.alert("Error", "Mínimo 6 caracteres.");
+      Alert.alert(t("error"), t("passwordTooShort"));
       return;
     }
     const result = await updatePassword(currentPwd, newPwd);
     if (result.success) {
-      Alert.alert("Éxito", "¡Contraseña actualizada!");
+      Alert.alert(t("success"), t("passwordUpdated"));
       setSubView("main");
       setCurrentPwd("");
       setNewPwd("");
       setConfirmPwd("");
     } else {
-      Alert.alert("Error", result.error);
+      Alert.alert(t("error"), result.error);
+    }
+  };
+
+  const handlePickAvatar = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      setUploadingAvatar(true);
+      const url = await uploadUserAvatar(
+        user.uid,
+        file.uri,
+        file.mimeType || "image/jpeg",
+      );
+      await updateUserProfile(user.uid, { photoURL: url });
+      await refreshProfile();
+    } catch (e) {
+      Alert.alert(t("error"), t("cannotUpdate"));
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -128,17 +212,31 @@ export default function ProfileScreen() {
           >
             <ChevronLeft color="#C7D2FE" size={24} />
           </AppButton>
-          <Text style={s.subHeaderTitle}>{t('editProfile')}</Text>
+          <Text style={s.subHeaderTitle}>{t("editProfile")}</Text>
         </View>
         <ScrollView contentContainerStyle={s.formContent}>
-          <View style={[s.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View
+            style={[
+              s.formCard,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
+          >
             <Text style={[s.formDesc, { color: theme.textSecondary }]}>
               Actualiza tu nombre y número de celular.
             </Text>
             <View>
-              <Text style={[s.label, { color: theme.textSecondary }]}>NOMBRE COMPLETO</Text>
+              <Text style={[s.label, { color: theme.textSecondary }]}>
+                NOMBRE COMPLETO
+              </Text>
               <TextInput
-                style={[s.input, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                style={[
+                  s.input,
+                  {
+                    backgroundColor: theme.input,
+                    borderColor: theme.inputBorder,
+                    color: theme.text,
+                  },
+                ]}
                 value={editName}
                 onChangeText={setEditName}
                 placeholderTextColor={theme.textMuted}
@@ -147,9 +245,18 @@ export default function ProfileScreen() {
               />
             </View>
             <View>
-              <Text style={[s.label, { color: theme.textSecondary }]}>NÚMERO DE CELULAR</Text>
+              <Text style={[s.label, { color: theme.textSecondary }]}>
+                {t("phoneNumber")}
+              </Text>
               <TextInput
-                style={[s.input, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                style={[
+                  s.input,
+                  {
+                    backgroundColor: theme.input,
+                    borderColor: theme.inputBorder,
+                    color: theme.text,
+                  },
+                ]}
                 value={editPhone}
                 onChangeText={setEditPhone}
                 keyboardType="phone-pad"
@@ -159,24 +266,36 @@ export default function ProfileScreen() {
               />
             </View>
             <View>
-              <Text style={[s.label, { color: theme.textSecondary }]}>CORREO ELECTRÓNICO</Text>
+              <Text style={[s.label, { color: theme.textSecondary }]}>
+                {t("emailLabel")}
+              </Text>
               <TextInput
-                style={[s.input, s.inputDisabled, { backgroundColor: isDark ? "#374151" : "#F3F4F6", borderColor: theme.inputBorder, color: theme.textMuted }]}
+                style={[
+                  s.input,
+                  s.inputDisabled,
+                  {
+                    backgroundColor: isDark ? "#374151" : "#F3F4F6",
+                    borderColor: theme.inputBorder,
+                    color: theme.textMuted,
+                  },
+                ]}
                 value={userProfile?.email || ""}
                 editable={false}
                 accessibilityLabel="Correo electrónico"
                 accessibilityHint="El correo no se puede modificar"
               />
-              <Text style={[s.hint, { color: theme.textMuted }]}>El correo no se puede modificar.</Text>
+              <Text style={[s.hint, { color: theme.textMuted }]}>
+                {t("emailCannotChange")}
+              </Text>
             </View>
             <AppButton
               style={s.saveBtn}
               onPress={handleProfileSubmit}
-              accessibilityLabel="Guardar cambios"
-              accessibilityHint="Doble toque para guardar tu información"
+              accessibilityLabel={t("saveChanges")}
+              accessibilityHint={t("saveChangesHint")}
             >
               <User color="#FFF" size={16} />
-              <Text style={s.saveBtnText}>Guardar Cambios</Text>
+              <Text style={s.saveBtnText}>{t("saveChanges")}</Text>
             </AppButton>
           </View>
         </ScrollView>
@@ -197,93 +316,156 @@ export default function ProfileScreen() {
           >
             <ChevronLeft color="#C7D2FE" size={24} />
           </AppButton>
-          <Text style={s.subHeaderTitle}>{t('changePassword')}</Text>
+          <Text style={s.subHeaderTitle}>{t("changePassword")}</Text>
         </View>
         <ScrollView contentContainerStyle={s.formContent}>
-          <View style={[s.formCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View
+            style={[
+              s.formCard,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
+          >
             <Text style={[s.formDesc, { color: theme.textSecondary }]}>
               Ingresa tu contraseña actual y la nueva.
             </Text>
             <View>
-              <Text style={[s.label, { color: theme.textSecondary }]}>CONTRASEÑA ACTUAL</Text>
+              <Text style={[s.label, { color: theme.textSecondary }]}>
+                {t("currentPassword")}
+              </Text>
               <View style={s.pwdRow}>
                 <TextInput
-                  style={[s.input, s.pwdInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                  style={[
+                    s.input,
+                    s.pwdInput,
+                    {
+                      backgroundColor: theme.input,
+                      borderColor: theme.inputBorder,
+                      color: theme.text,
+                    },
+                  ]}
                   secureTextEntry={!showCurrentPwd}
                   value={currentPwd}
                   onChangeText={setCurrentPwd}
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
-                  accessibilityLabel="Contraseña actual"
-                  accessibilityHint="Ingresa tu contraseña actual"
+                  accessibilityLabel={t("currentPassword")}
+                  accessibilityHint={t("enterCurrentPassword")}
                 />
                 <AppButton
                   style={s.eyeBtn}
                   onPress={() => setShowCurrentPwd((v) => !v)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  overrideText={showCurrentPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  accessibilityHint={showCurrentPwd ? 'Doble toque para ocultar la contraseña' : 'Doble toque para mostrar la contraseña'}
+                  overrideText={
+                    showCurrentPwd ? t("hidePassword") : t("showPassword")
+                  }
+                  accessibilityHint={
+                    showCurrentPwd
+                      ? t("hidePasswordHint")
+                      : t("showPasswordHint")
+                  }
                 >
-                  {showCurrentPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
+                  {showCurrentPwd ? (
+                    <EyeOff color={theme.textMuted} size={18} />
+                  ) : (
+                    <Eye color={theme.textMuted} size={18} />
+                  )}
                 </AppButton>
               </View>
             </View>
             <View>
-              <Text style={[s.label, { color: theme.textSecondary }]}>NUEVA CONTRASEÑA</Text>
+              <Text style={[s.label, { color: theme.textSecondary }]}>
+                {t("newPassword")}
+              </Text>
               <View style={s.pwdRow}>
                 <TextInput
-                  style={[s.input, s.pwdInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                  style={[
+                    s.input,
+                    s.pwdInput,
+                    {
+                      backgroundColor: theme.input,
+                      borderColor: theme.inputBorder,
+                      color: theme.text,
+                    },
+                  ]}
                   secureTextEntry={!showNewPwd}
                   value={newPwd}
                   onChangeText={setNewPwd}
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
-                  accessibilityLabel="Nueva contraseña"
-                  accessibilityHint="Ingresa tu nueva contraseña"
+                  accessibilityLabel={t("newPassword")}
+                  accessibilityHint={t("enterNewPassword")}
                 />
                 <AppButton
                   style={s.eyeBtn}
                   onPress={() => setShowNewPwd((v) => !v)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  overrideText={showNewPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  accessibilityHint={showNewPwd ? 'Doble toque para ocultar la contraseña' : 'Doble toque para mostrar la contraseña'}
+                  overrideText={
+                    showNewPwd ? t("hidePassword") : t("showPassword")
+                  }
+                  accessibilityHint={
+                    showNewPwd ? t("hidePasswordHint") : t("showPasswordHint")
+                  }
                 >
-                  {showNewPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
+                  {showNewPwd ? (
+                    <EyeOff color={theme.textMuted} size={18} />
+                  ) : (
+                    <Eye color={theme.textMuted} size={18} />
+                  )}
                 </AppButton>
               </View>
             </View>
             <View>
-              <Text style={[s.label, { color: theme.textSecondary }]}>CONFIRMAR NUEVA CONTRASEÑA</Text>
+              <Text style={[s.label, { color: theme.textSecondary }]}>
+                {t("confirmNewPassword")}
+              </Text>
               <View style={s.pwdRow}>
                 <TextInput
-                  style={[s.input, s.pwdInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+                  style={[
+                    s.input,
+                    s.pwdInput,
+                    {
+                      backgroundColor: theme.input,
+                      borderColor: theme.inputBorder,
+                      color: theme.text,
+                    },
+                  ]}
                   secureTextEntry={!showConfirmPwd}
                   value={confirmPwd}
                   onChangeText={setConfirmPwd}
                   placeholder="••••••••"
                   placeholderTextColor={theme.textMuted}
-                  accessibilityLabel="Confirmar nueva contraseña"
-                  accessibilityHint="Repite tu nueva contraseña para confirmar"
+                  accessibilityLabel={t("confirmNewPassword")}
+                  accessibilityHint={t("confirmNewPasswordHint")}
                 />
                 <AppButton
                   style={s.eyeBtn}
                   onPress={() => setShowConfirmPwd((v) => !v)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  overrideText={showConfirmPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  accessibilityHint={showConfirmPwd ? 'Doble toque para ocultar la contraseña' : 'Doble toque para mostrar la contraseña'}
+                  overrideText={
+                    showConfirmPwd ? t("hidePassword") : t("showPassword")
+                  }
+                  accessibilityHint={
+                    showConfirmPwd
+                      ? t("hidePasswordHint")
+                      : t("showPasswordHint")
+                  }
                 >
-                  {showConfirmPwd ? <EyeOff color={theme.textMuted} size={18} /> : <Eye color={theme.textMuted} size={18} />}
+                  {showConfirmPwd ? (
+                    <EyeOff color={theme.textMuted} size={18} />
+                  ) : (
+                    <Eye color={theme.textMuted} size={18} />
+                  )}
                 </AppButton>
               </View>
             </View>
             <AppButton
               style={s.saveBtn}
               onPress={handlePasswordSubmit}
-              accessibilityLabel="Guardar contraseña"
-              accessibilityHint="Doble toque para actualizar tu contraseña"
+              accessibilityLabel={t("savePassword")}
+              accessibilityHint={t("savePasswordHint")}
             >
               <Lock color="#FFF" size={16} />
-              <Text style={s.saveBtnText}>Guardar Contraseña</Text>
+              <Text style={s.saveBtnText}>{t("savePassword")}</Text>
             </AppButton>
           </View>
         </ScrollView>
@@ -295,168 +477,342 @@ export default function ProfileScreen() {
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
-      <View style={[s.profileHeader, { backgroundColor: theme.headerBg }]} />
       <ScrollView
         style={s.profileScroll}
-        contentContainerStyle={[
-          s.profileContent,
-          { paddingBottom: Math.max(32, insets.bottom + 32) },
-        ]}
+        contentContainerStyle={{
+          paddingBottom: Math.max(32, insets.bottom + 32),
+        }}
       >
-        {/* Avatar */}
-        <View style={s.avatarContainer}>
-          <View style={[s.avatarCircle, { borderColor: theme.bg, backgroundColor: isDark ? "#312E81" : "#EEF2FF" }]}>
-            <User color="#4F46E5" size={48} />
-          </View>
-          <AppButton
-            style={s.editAvatarBtn}
-            onPress={() => {
-              setEditName(userProfile?.name || "");
-              setEditPhone(userProfile?.phone || "");
-              setSubView("editProfile");
-            }}
-            accessibilityLabel="Editar perfil"
-            accessibilityHint="Doble toque para editar tu información personal"
-          >
-            <Edit3 color="#FFF" size={14} />
-          </AppButton>
-        </View>
-        <Text style={[s.userName, { color: theme.text }]}>{userProfile?.name || "Usuario"}</Text>
-        <Text style={[s.userEmail, { color: theme.textSecondary }]}>{userProfile?.email || ""}</Text>
-        {userProfile?.phone ? (
-          <View style={s.phoneRow}>
-            <Phone color={theme.textSecondary} size={14} />
-            <Text style={[s.userPhone, { color: theme.textSecondary }]}>{userProfile.phone}</Text>
-          </View>
-        ) : null}
-        <View style={[s.roleBadge, { backgroundColor: isDark ? "#1E1B4B" : "#EEF2FF", borderColor: isDark ? "#4338CA" : "#C7D2FE" }]}>
-          <View style={s.roleDot} />
-          <Text style={s.roleText}>{userProfile?.role || "Miembro"}</Text>
-        </View>
+        {/* Header morado — dentro del scroll, se desplaza con el contenido */}
+        <View style={[s.profileHeader, { backgroundColor: theme.headerBg }]} />
 
-        {/* Settings */}
-        <View style={[s.settingsCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <View style={[s.settingsHeader, { backgroundColor: isDark ? "#1F2937" : "#FAFAFA", borderBottomColor: theme.divider }]}>
-            <Settings color={theme.textSecondary} size={16} />
-            <Text style={[s.settingsTitle, { color: theme.textSecondary }]}>{t('accountSettings')}</Text>
-          </View>
-          <AppButton
-            style={s.settingsRow}
-            onPress={() => {
-              setEditName(userProfile?.name || "");
-              setEditPhone(userProfile?.phone || "");
-              setSubView("editProfile");
-            }}
-            accessibilityLabel="Información personal"
-            accessibilityHint="Doble toque para editar tu nombre y teléfono"
-          >
-            <View style={s.settingsLeft}>
-              <View style={[s.settingsIcon, { backgroundColor: "#EFF6FF" }]}>
-                <User color="#2563EB" size={16} />
-              </View>
-              <Text style={[s.settingsLabel, { color: theme.text }]}>{t('personalInfo')}</Text>
-            </View>
-            <ChevronRight color={theme.textMuted} size={16} />
-          </AppButton>
-          <View style={[s.divider, { backgroundColor: theme.divider }]} />
-          <AppButton
-            style={s.settingsRow}
-            onPress={() => setSubView("password")}
-            accessibilityLabel="Cambiar contraseña"
-            accessibilityHint="Doble toque para actualizar tu contraseña"
-          >
-            <View style={s.settingsLeft}>
-              <View style={[s.settingsIcon, { backgroundColor: "#FFF7ED" }]}>
-                <Lock color="#EA580C" size={16} />
-              </View>
-              <Text style={[s.settingsLabel, { color: theme.text }]}>{t('changePassword')}</Text>
-            </View>
-            <ChevronRight color={theme.textMuted} size={16} />
-          </AppButton>
-          <View style={[s.divider, { backgroundColor: theme.divider }]} />
-          <AppButton
-            style={s.settingsRow}
-            onPress={() => setNotificationsEnabled((prev) => !prev)}
-            activeOpacity={0.7}
-            accessibilityLabel={notificationsEnabled ? "Notificaciones activadas" : "Notificaciones desactivadas"}
-            accessibilityHint="Doble toque para cambiar"
-            accessibilityState={{ checked: notificationsEnabled }}
-          >
-            <View style={s.settingsLeft}>
-              <View style={[s.settingsIcon, { backgroundColor: "#FAF5FF" }]}>
-                <Bell color="#9333EA" size={16} />
-              </View>
-              <View>
-                <Text style={[s.settingsLabel, { color: theme.text }]}>{t('pushNotifications')}</Text>
-                <Text style={s.settingsHint}>Alertas de tareas pendientes</Text>
-              </View>
-            </View>
-            <View style={[s.toggle, !notificationsEnabled && s.toggleOff]}>
+        <View style={[s.profileContent]}>
+          {/* Avatar */}
+          <View style={s.avatarContainer}>
+            <TouchableOpacity
+              onPress={handlePickAvatar}
+              disabled={uploadingAvatar}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t("changeProfilePhoto")}
+              accessibilityHint={t("changeProfilePhotoHint")}
+            >
               <View
-                style={[s.toggleKnob, !notificationsEnabled && s.toggleKnobOff]}
+                style={[
+                  s.avatarCircle,
+                  {
+                    borderColor: theme.bg,
+                    backgroundColor: isDark ? "#312E81" : "#EEF2FF",
+                  },
+                ]}
+              >
+                {uploadingAvatar ? (
+                  <ActivityIndicator color="#4F46E5" size="large" />
+                ) : userProfile?.photoURL ? (
+                  <Image
+                    source={{ uri: userProfile.photoURL }}
+                    style={s.avatarImage}
+                  />
+                ) : (
+                  <User color="#4F46E5" size={48} />
+                )}
+              </View>
+            </TouchableOpacity>
+            {/* Botón cámara sobre el avatar */}
+            <TouchableOpacity
+              style={s.editAvatarBtn}
+              onPress={handlePickAvatar}
+              disabled={uploadingAvatar}
+              accessibilityRole="button"
+              accessibilityLabel={t("changeProfilePhoto")}
+              accessibilityHint={t("changeProfilePhotoHint")}
+            >
+              <Camera color="#FFF" size={14} />
+            </TouchableOpacity>
+          </View>
+          <Text style={[s.userName, { color: theme.text }]}>
+            {userProfile?.name || t("userFallback")}
+          </Text>
+          <Text style={[s.userEmail, { color: theme.textSecondary }]}>
+            {userProfile?.email || ""}
+          </Text>
+          {userProfile?.phone ? (
+            <View style={s.phoneRow}>
+              <Phone color={theme.textSecondary} size={14} />
+              <Text style={[s.userPhone, { color: theme.textSecondary }]}>
+                {userProfile.phone}
+              </Text>
+            </View>
+          ) : null}
+          <View style={s.badgesRow}>
+            <View
+              style={[
+                s.roleBadge,
+                {
+                  backgroundColor: isDark ? "#1E1B4B" : "#EEF2FF",
+                  borderColor: isDark ? "#4338CA" : "#C7D2FE",
+                },
+              ]}
+            >
+              <View style={s.roleDot} />
+              <Text style={s.roleText}>{displayRole}</Text>
+            </View>
+            <View
+              style={[
+                s.planBadge,
+                isPro
+                  ? {
+                      backgroundColor: isDark ? "#312E81" : "#EDE9FE",
+                      borderColor: isDark ? "#7C3AED" : "#C4B5FD",
+                    }
+                  : {
+                      backgroundColor: isDark ? "#1F2937" : "#F3F4F6",
+                      borderColor: isDark ? "#374151" : "#D1D5DB",
+                    },
+              ]}
+            >
+              <Crown
+                color={isPro ? "#7C3AED" : isDark ? "#6B7280" : "#9CA3AF"}
+                size={11}
               />
+              <Text
+                style={[
+                  s.planBadgeText,
+                  isPro
+                    ? { color: "#7C3AED" }
+                    : { color: isDark ? "#9CA3AF" : "#6B7280" },
+                ]}
+              >
+                {isPro
+                  ? currentBilling === "annual"
+                    ? t("planPersonalAnnual")
+                    : t("planPersonalMonthly")
+                  : t("planFree")}
+              </Text>
             </View>
-          </AppButton>
-          <View style={[s.divider, { backgroundColor: theme.divider }]} />
-          <AppButton
-            style={s.settingsRow}
-            onPress={toggleTheme}
-            activeOpacity={0.7}
-            accessibilityLabel={isDark ? "Modo oscuro activado" : "Modo claro activado"}
-            accessibilityHint="Doble toque para cambiar el tema"
-            accessibilityState={{ checked: isDark }}
+          </View>
+
+          {/* Settings */}
+          <View
+            style={[
+              s.settingsCard,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
           >
-            <View style={s.settingsLeft}>
-              <View style={[s.settingsIcon, { backgroundColor: isDark ? "#1E3A5F" : "#F0F9FF" }]}>
-                {isDark ? <Moon color="#60A5FA" size={16} /> : <Sun color="#F59E0B" size={16} />}
-              </View>
-              <View>
-                <Text style={[s.settingsLabel, { color: theme.text }]}>{t('themeApp')}</Text>
-                <Text style={s.settingsHint}>{isDark ? "Modo oscuro activo" : "Modo claro activo"}</Text>
-              </View>
+            <View
+              style={[
+                s.settingsHeader,
+                {
+                  backgroundColor: isDark ? "#1F2937" : "#FAFAFA",
+                  borderBottomColor: theme.divider,
+                },
+              ]}
+            >
+              <Settings color={theme.textSecondary} size={16} />
+              <Text style={[s.settingsTitle, { color: theme.textSecondary }]}>
+                {t("accountSettings")}
+              </Text>
             </View>
-            <View style={[s.toggle, !isDark && s.toggleOff, isDark && { backgroundColor: "#60A5FA" }]}>
-              <View style={[s.toggleKnob, !isDark && s.toggleKnobOff]} />
-            </View>
-          </AppButton>
-          <View style={[s.divider, { backgroundColor: theme.divider }]} />
+            <AppButton
+              style={s.settingsRow}
+              onPress={() => {
+                setEditName(userProfile?.name || "");
+                setEditPhone(userProfile?.phone || "");
+                setSubView("editProfile");
+              }}
+              accessibilityLabel={t("personalInfo")}
+              accessibilityHint={t("updatePersonalInfo")}
+            >
+              <View style={s.settingsLeft}>
+                <View style={[s.settingsIcon, { backgroundColor: "#EFF6FF" }]}>
+                  <User color="#2563EB" size={16} />
+                </View>
+                <Text style={[s.settingsLabel, { color: theme.text }]}>
+                  {t("personalInfo")}
+                </Text>
+              </View>
+              <ChevronRight color={theme.textMuted} size={16} />
+            </AppButton>
+            <View style={[s.divider, { backgroundColor: theme.divider }]} />
+            <AppButton
+              style={s.settingsRow}
+              onPress={() => setSubView("password")}
+              accessibilityLabel={t("changePassword")}
+              accessibilityHint={t("enterNewPassword")}
+            >
+              <View style={s.settingsLeft}>
+                <View style={[s.settingsIcon, { backgroundColor: "#FFF7ED" }]}>
+                  <Lock color="#EA580C" size={16} />
+                </View>
+                <Text style={[s.settingsLabel, { color: theme.text }]}>
+                  {t("changePassword")}
+                </Text>
+              </View>
+              <ChevronRight color={theme.textMuted} size={16} />
+            </AppButton>
+            <View style={[s.divider, { backgroundColor: theme.divider }]} />
+            <AppButton
+              style={s.settingsRow}
+              onPress={() => setNotificationsEnabled((prev) => !prev)}
+              activeOpacity={0.7}
+              accessibilityLabel={
+                notificationsEnabled
+                  ? t("notificationsEnabled")
+                  : t("notificationsDisabled")
+              }
+              accessibilityHint={t("toggleThemeHint")}
+              accessibilityState={{ checked: notificationsEnabled }}
+            >
+              <View style={s.settingsLeft}>
+                <View style={[s.settingsIcon, { backgroundColor: "#FAF5FF" }]}>
+                  <Bell color="#9333EA" size={16} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.settingsLabel, { color: theme.text }]}>
+                    {t("pushNotifications")}
+                  </Text>
+                  <Text style={s.settingsHint}>{t("taskAlerts")}</Text>
+                </View>
+              </View>
+              <View style={[s.toggle, !notificationsEnabled && s.toggleOff]}>
+                <View
+                  style={[
+                    s.toggleKnob,
+                    !notificationsEnabled && s.toggleKnobOff,
+                  ]}
+                />
+              </View>
+            </AppButton>
+            <View style={[s.divider, { backgroundColor: theme.divider }]} />
+            <AppButton
+              style={s.settingsRow}
+              onPress={toggleTheme}
+              activeOpacity={0.7}
+              accessibilityLabel={isDark ? t("darkMode") : t("lightMode")}
+              accessibilityHint={t("toggleThemeHint")}
+              accessibilityState={{ checked: isDark }}
+            >
+              <View style={s.settingsLeft}>
+                <View
+                  style={[
+                    s.settingsIcon,
+                    { backgroundColor: isDark ? "#1E3A5F" : "#F0F9FF" },
+                  ]}
+                >
+                  {isDark ? (
+                    <Moon color="#60A5FA" size={16} />
+                  ) : (
+                    <Sun color="#F59E0B" size={16} />
+                  )}
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.settingsLabel, { color: theme.text }]}>
+                    {t("themeApp")}
+                  </Text>
+                  <Text style={s.settingsHint}>
+                    {isDark ? t("darkMode") : t("lightMode")}
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={[
+                  s.toggle,
+                  !isDark && s.toggleOff,
+                  isDark && { backgroundColor: "#60A5FA" },
+                ]}
+              >
+                <View style={[s.toggleKnob, !isDark && s.toggleKnobOff]} />
+              </View>
+            </AppButton>
+            <View style={[s.divider, { backgroundColor: theme.divider }]} />
+            <AppButton
+              style={s.settingsRow}
+              onPress={() => setIsPlanMenuOpen(true)}
+              activeOpacity={0.7}
+              accessibilityLabel={t("managePlan")}
+              accessibilityHint={t("managePlanHint")}
+            >
+              <View style={s.settingsLeft}>
+                <View
+                  style={[
+                    s.settingsIcon,
+                    { backgroundColor: isDark ? "#2E1065" : "#EDE9FE" },
+                  ]}
+                >
+                  <Crown color="#7C3AED" size={16} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.settingsLabel, { color: theme.text }]}>
+                    {t("managePlan")}
+                  </Text>
+                  <Text style={s.settingsHint}>
+                    {isPro
+                      ? `${t("planPersonal")} · ${currentBilling === "annual" ? t("annual") : t("monthly")}`
+                      : t("upgradeSubscription")}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight color={theme.textMuted} size={16} />
+            </AppButton>
+            <View style={[s.divider, { backgroundColor: theme.divider }]} />
+            <AppButton
+              style={s.settingsRow}
+              onPress={() => setIsMenuOpen(true)}
+              activeOpacity={0.7}
+              accessibilityLabel={t("accessibilityMenu")}
+              accessibilityHint={t("accessibilityMenuHint")}
+            >
+              <View style={s.settingsLeft}>
+                <View
+                  style={[
+                    s.settingsIcon,
+                    { backgroundColor: isDark ? "#14532D" : "#F0FDF4" },
+                  ]}
+                >
+                  <AccessibilityIcon color="#16A34A" size={16} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.settingsLabel, { color: theme.text }]}>
+                    {t("accessibilityMenu")}
+                  </Text>
+                  <Text style={s.settingsHint}>
+                    {t("accessibilityMenuDescription")}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight color={theme.textMuted} size={16} />
+            </AppButton>
+          </View>
+
+          {/* Logout */}
           <AppButton
-            style={s.settingsRow}
-            onPress={() => setIsMenuOpen(true)}
-            activeOpacity={0.7}
-            accessibilityLabel="Menú de accesibilidad"
-            accessibilityHint="Doble toque para abrir opciones de accesibilidad"
+            style={s.logoutBtn}
+            onPress={handleLogout}
+            accessibilityLabel={t("logoutSecure")}
+            accessibilityHint={t("logoutHint")}
           >
-            <View style={s.settingsLeft}>
-              <View style={[s.settingsIcon, { backgroundColor: isDark ? "#14532D" : "#F0FDF4" }]}>
-                <AccessibilityIcon color="#16A34A" size={16} />
-              </View>
-              <View>
-                <Text style={[s.settingsLabel, { color: theme.text }]}>Menú de Accesibilidad</Text>
-                <Text style={s.settingsHint}>Tamaño de texto, contrastes y dislexia</Text>
-              </View>
-            </View>
-            <ChevronRight color={theme.textMuted} size={16} />
+            <LogOut color="#DC2626" size={20} />
+            <Text style={s.logoutText}>{t("logoutSecure")}</Text>
           </AppButton>
         </View>
-
-        {/* Logout */}
-        <AppButton
-          style={s.logoutBtn}
-          onPress={handleLogout}
-          accessibilityLabel="Cerrar sesión"
-          accessibilityHint="Doble toque para salir de tu cuenta"
-        >
-          <LogOut color="#DC2626" size={20} />
-          <Text style={s.logoutText}>{t('logoutSecure')}</Text>
-        </AppButton>
       </ScrollView>
+
+      {/* Sidebars — fuera del ScrollView, acotados entre status bar y tab bar */}
+      <PlanMenu
+        visible={isPlanMenuOpen}
+        onClose={closePlanMenu}
+        currentPlan={currentPlan}
+        currentBilling={currentBilling}
+        onSelectPlan={handleSelectPlan}
+      />
+      <AccessibilityMenu />
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
+  // overflow: hidden evita que sidebars absolutos se dibujen sobre la tab bar
+  container: { flex: 1, backgroundColor: "#F9FAFB", overflow: "hidden" },
   // Sub-view headers
   subHeader: {
     backgroundColor: "#4F46E5",
@@ -524,18 +880,15 @@ const s = StyleSheet.create({
   saveBtnText: { color: "#FFF", fontSize: 14, fontWeight: "700" },
   // Main profile
   profileHeader: {
-    backgroundColor: "#4F46E5",
-    minHeight: 128,
-    paddingTop: 48,
-    alignItems: "center",
+    height: 128,
   },
   profileScroll: {
-    marginTop: -56,
+    flex: 1,
   },
   profileContent: {
+    marginTop: -56,
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingBottom: 32,
     paddingTop: 0,
   },
   avatarContainer: { position: "relative", marginBottom: 16 },
@@ -549,6 +902,11 @@ const s = StyleSheet.create({
     borderWidth: 4,
     borderColor: "#F9FAFB",
     elevation: 4,
+  },
+  avatarImage: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
   },
   editAvatarBtn: {
     position: "absolute",
@@ -569,6 +927,15 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   userPhone: { fontSize: 14, color: "#6B7280" },
+  badgesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 24,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
   roleBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -579,11 +946,22 @@ const s = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "#C7D2FE",
-    marginTop: 12,
-    marginBottom: 24,
   },
   roleDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#6366F1" },
   roleText: { fontSize: 12, fontWeight: "700", color: "#4338CA" },
+  planBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  planBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
   // Settings card
   settingsCard: {
     width: "100%",
@@ -617,7 +995,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
-  settingsLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  settingsLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
   settingsIcon: {
     width: 36,
     height: 36,

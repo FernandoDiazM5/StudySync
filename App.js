@@ -10,9 +10,13 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AccessibilityProvider } from './src/contexts/AccessibilityContext';
 import { FileStorageProvider } from './src/contexts/FileStorageContext';
-import AccessibilityMenu from './src/components/AccessibilityMenu';
 import AppNavigator from './src/navigation/AppNavigator';
-import { StatusBar } from 'react-native';
+import AppStatusBar from './src/components/AppStatusBar';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Mantener el splash nativo visible hasta que Firebase resuelva la sesión.
+// Debe llamarse ANTES del primer render para que no haya parpadeo.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
   return (
@@ -22,9 +26,8 @@ export default function App() {
           <AuthProvider>
             <FileStorageProvider>
               <NavigationContainer>
-                <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
+                <AppStatusBar />
                 <AppNavigator />
-                <AccessibilityMenu />
               </NavigationContainer>
             </FileStorageProvider>
           </AuthProvider>

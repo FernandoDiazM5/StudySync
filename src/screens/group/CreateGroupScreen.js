@@ -12,13 +12,15 @@ import {
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
+import { useTheme } from "../../contexts/ThemeContext";
 import { ChevronLeft, Users } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { createGroup } from "../../services/firestoreService";
 
 export default function CreateGroupScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { t } = useAccessibility();
+  const { theme } = useTheme();
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,7 +36,9 @@ export default function CreateGroupScreen({ navigation }) {
         name: name.trim(),
         desc: desc.trim() || t('defaultGroupDesc'),
         leaderId: user.uid,
+        leaderName: userProfile?.name || user.displayName || 'Líder',
         members: [user.uid],
+        leaderPlan: userProfile?.plan || 'free',
       });
       Alert.alert(t('success'), t('groupCreatedSuccess'), [
         { text: "OK", onPress: () => navigation.goBack() },
@@ -47,50 +51,70 @@ export default function CreateGroupScreen({ navigation }) {
   };
 
   return (
-    <View style={s.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
-      <View style={s.header}>
+    <View style={[s.container, { backgroundColor: theme.bg }]}>
+      <StatusBar
+        barStyle={theme.dark ? "light-content" : "dark-content"}
+        backgroundColor={theme.card}
+      />
+      <View style={[s.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <AppButton
           onPress={() => navigation.goBack()}
           accessibilityLabel="Volver"
           accessibilityHint="Doble toque para regresar"
         >
-          <ChevronLeft color="#6B7280" size={24} />
+          <ChevronLeft color={theme.textSecondary} size={24} />
         </AppButton>
-        <Text style={s.headerTitle}>{t('createNewGroup')}</Text>
+        <Text style={[s.headerTitle, { color: theme.text }]}>{t('createNewGroup')}</Text>
         <View style={{ width: 24 }} />
       </View>
+
       <View style={s.form}>
-        <View style={s.iconWrap}>
+        <View style={[s.iconWrap, { backgroundColor: theme.dark ? "#1e1b4b" : "#EEF2FF" }]}>
           <Users color="#4F46E5" size={32} />
         </View>
-        <Text style={s.subtitle}>
+
+        <Text style={[s.subtitle, { color: theme.textSecondary }]}>
           {t('groupDescription') || 'Crea un nuevo espacio de trabajo para tu materia o proyecto.'}
         </Text>
+
         <View>
-          <Text style={s.label}>{t('groupName').toUpperCase()}</Text>
+          <Text style={[s.label, { color: theme.textSecondary }]}>
+            {t('groupName').toUpperCase()}
+          </Text>
           <TextInput
-            style={s.input}
+            style={[s.input, {
+              backgroundColor: theme.input,
+              borderColor: theme.inputBorder,
+              color: theme.text,
+            }]}
             placeholder={t('exampleGroupName')}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.textMuted}
             value={name}
             onChangeText={setName}
             accessibilityLabel="Nombre del grupo"
             accessibilityHint="Escribe el nombre de tu grupo de estudio"
           />
         </View>
+
         <View>
-          <Text style={s.label}>{t('groupDescription').toUpperCase()} (OPCIONAL)</Text>
+          <Text style={[s.label, { color: theme.textSecondary }]}>
+            {t('groupDescription').toUpperCase()} (OPCIONAL)
+          </Text>
           <TextInput
-            style={s.input}
+            style={[s.input, {
+              backgroundColor: theme.input,
+              borderColor: theme.inputBorder,
+              color: theme.text,
+            }]}
             placeholder={t('exampleGroupDesc')}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={theme.textMuted}
             value={desc}
             onChangeText={setDesc}
             accessibilityLabel="Descripción del grupo"
             accessibilityHint="Escribe una descripción opcional para el grupo"
           />
         </View>
+
         <AppButton
           style={[s.btn, loading && { opacity: 0.7 }]}
           onPress={handleCreateGroup}
@@ -111,25 +135,22 @@ export default function CreateGroupScreen({ navigation }) {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
+  container: { flex: 1 },
   header: {
-    backgroundColor: "#FFF",
     paddingHorizontal: 16,
     paddingVertical: 16,
     paddingTop: 48,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     elevation: 2,
   },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: "700", color: "#1F2937" },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: "700" },
   form: { flex: 1, padding: 24, gap: 20 },
   iconWrap: {
     width: 64,
     height: 64,
-    backgroundColor: "#EEF2FF",
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
@@ -139,25 +160,20 @@ const s = StyleSheet.create({
   subtitle: {
     textAlign: "center",
     fontSize: 14,
-    color: "#6B7280",
     marginBottom: 24,
   },
   label: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#4B5563",
     letterSpacing: 0.5,
     marginBottom: 8,
   },
   input: {
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
     borderRadius: 10,
     fontSize: 14,
-    color: "#1F2937",
   },
   btn: {
     backgroundColor: "#4F46E5",

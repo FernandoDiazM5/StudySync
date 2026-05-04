@@ -3,17 +3,72 @@
 // Manejo de autenticación con Firebase Auth
 // ============================================
 
-import { 
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updatePassword as firebaseUpdatePassword,
+  sendPasswordResetEmail,
   onAuthStateChanged,
   EmailAuthProvider,
   reauthenticateWithCredential
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
+import { invalidateUserCache } from './firestoreService';
+
+/**
+ * Combina el documento Firestore `users` con Auth (displayName, email, photo)
+ * para que nunca falte nombre/email en UI si el doc está vacío o no existe.
+ */
+export const mergeUserProfileFromAuth = (firebaseUser, firestoreData) => {
+  const d =
+    firestoreData && typeof firestoreData === 'object' ? { ...firestoreData } : {};
+  const authEmail = firebaseUser?.email || '';
+  const authName =
+    (firebaseUser?.displayName && String(firebaseUser.displayName).trim()) || '';
+  const fromEmail =
+    authEmail && authEmail.includes('@')
+      ? authEmail.split('@')[0].trim()
+      : '';
+  const firestoreName =
+    typeof d.name === 'string' && d.name.trim() ? d.name.trim() : '';
+  return {
+    ...d,
+    id: firebaseUser.uid,
+    email: (typeof d.email === 'string' && d.email.trim()) || authEmail,
+    name: firestoreName || authName || fromEmail || 'Usuario',
+    phone: d.phone ?? '',
+    role: d.role ?? 'Miembro',
+    plan: d.plan || 'free',
+    planBilling: d.planBilling || 'monthly',
+    photoURL: d.photoURL || firebaseUser.photoURL || null,
+  };
+};
+
+async function ensureUserProfileDocument(uid, merged) {
+  try {
+    invalidateUserCache(uid);
+    await setDoc(
+      doc(db, 'users', uid),
+      {
+        id: uid,
+        email: merged.email || '',
+        name: merged.name || '',
+        phone: merged.phone ?? '',
+        role: merged.role || 'Miembro',
+        plan: merged.plan || 'free',
+        planBilling: merged.planBilling || 'monthly',
+        ...(merged.photoURL ? { photoURL: merged.photoURL } : {}),
+        createdAt: merged.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+  } catch (e) {
+    console.warn('[ensureUserProfileDocument]', e?.message);
+  }
+}
 
 /**
  * Registrar un nuevo usuario
@@ -84,15 +139,38 @@ export const updatePassword = async (currentPassword, newPassword) => {
 };
 
 /**
- * Obtener datos del perfil de usuario desde Firestore
+ * Enviar correo de recuperación de contraseña
  */
-export const getUserProfile = async (uid) => {
+export const sendPasswordReset = async (email) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error.code) };
+  }
+};
+
+/**
+ * Obtener datos del perfil desde Firestore y unirlos con Auth.
+ * @param {string} uid
+ * @param {object | null} authUser — usuario de Firebase Auth; si se pasa, siempre hay `data` usable y se crea el doc si no existía.
+ */
+export const getUserProfile = async (uid, authUser = null) => {
   try {
     const docRef = doc(db, 'users', uid);
     const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return { success: true, data: docSnap.data() };
+    const exists = docSnap.exists();
+    const raw = exists ? docSnap.data() : null;
+
+    if (authUser && authUser.uid === uid) {
+      const merged = mergeUserProfileFromAuth(authUser, raw);
+      if (!exists) {
+        ensureUserProfileDocument(uid, merged).catch(() => {});
+      }
+      return { success: true, data: merged };
     }
+
+    if (raw) return { success: true, data: raw };
     return { success: false, error: 'Usuario no encontrado' };
   } catch (error) {
     return { success: false, error: error.message };

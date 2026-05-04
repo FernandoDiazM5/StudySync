@@ -11,44 +11,63 @@ export const FileStorageProvider = ({ children }) => {
    * @param {string} fileName - Nombre del archivo
    * @returns {Promise<{filePath, publicUrl, fileName}>}
    */
-  const uploadGroupFile = async (groupId, fileUri, fileName, mimeType) => {
+  const uploadGroupFile = async (groupId, fileUri, fileName, mimeType, onProgress) => {
     try {
-      console.log(`[FileStorage] Subiendo: ${fileName} → grupo: ${groupId}`);
-      console.log(`[FileStorage] URI: ${fileUri}`);
+      // Fase 1 – preparando (0 → 10%)
+      onProgress?.(5);
 
-      // 1. Crear ruta única dentro del bucket
       const timestamp = Date.now();
       const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
       const filePath = `${groupId}/${timestamp}_${safeName}`;
       const contentType = mimeType || 'application/octet-stream';
 
-      console.log(`[FileStorage] Ruta destino: ${filePath}`);
-
-      // 2. Leer el contenido del archivo como ArrayBuffer
-      //    Funciona tanto con blob: (Expo Web) como con file:// (nativo)
+      // Leer como Blob (soportado en React Native / Hermes)
       const response = await fetch(fileUri);
-      if (!response.ok) {
-        throw new Error(`No se pudo leer el archivo (status ${response.status})`);
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      console.log(`[FileStorage] Tamaño leído: ${arrayBuffer.byteLength} bytes`);
+      if (!response.ok) throw new Error(`No se pudo leer el archivo (status ${response.status})`);
+      const blob = await response.blob();
+      onProgress?.(10);
 
-      // 3. Subir ArrayBuffer a Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('group-files')
-        .upload(filePath, arrayBuffer, {
-          contentType,
-          upsert: false,
-        });
+      // Fase 2 – subiendo con XHR para progreso real (10 → 90%)
+      await new Promise((resolve, reject) => {
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-      if (error) {
-        console.error('[FileStorage] Error Supabase:', JSON.stringify(error));
-        throw new Error(`Error al subir archivo: ${error.message}`);
-      }
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          const token = session?.access_token || supabaseAnonKey;
+          const uploadUrl = `${supabaseUrl}/storage/v1/object/group-files/${filePath}`;
 
-      console.log('[FileStorage] Archivo subido OK:', data);
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', uploadUrl);
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.setRequestHeader('Content-Type', contentType);
+          xhr.setRequestHeader('x-upsert', 'false');
 
-      // 4. Obtener URL pública
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && e.total > 0) {
+              // mapear 0-100% del XHR a 10-90% del progreso total.
+              // Clampear a [10, 90]: en algunos Android e.loaded puede superar
+              // e.total (quirk de XHR), lo que daría valores > 100.
+              const raw = 10 + Math.round((e.loaded / e.total) * 80);
+              onProgress?.(Math.min(90, Math.max(10, raw)));
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              onProgress?.(90);
+              resolve();
+            } else {
+              reject(new Error(`Error al subir (${xhr.status}): ${xhr.responseText}`));
+            }
+          };
+          xhr.onerror   = () => reject(new Error('Error de red al subir archivo'));
+          xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado'));
+
+          xhr.send(blob);
+        }).catch(reject);
+      });
+
+      // Obtener URL pública
       const { data: publicData } = supabase.storage
         .from('group-files')
         .getPublicUrl(filePath);
@@ -161,6 +180,40 @@ export const FileStorageProvider = ({ children }) => {
   };
 
   /**
+   * Subir/reemplazar el avatar del usuario
+   * @param {string} userId - UID del usuario
+   * @param {string} fileUri - URI local de la imagen
+   * @param {string} mimeType - tipo MIME
+   * @returns {Promise<string>} URL pública con cache-buster
+   */
+  const uploadUserAvatar = async (userId, fileUri, mimeType) => {
+    try {
+      const ext = mimeType?.split('/')[1]?.split('+')[0] || 'jpg';
+      const filePath = `avatars/users/${userId}/photo.${ext}`;
+      const contentType = mimeType || 'image/jpeg';
+
+      const response = await fetch(fileUri);
+      if (!response.ok) throw new Error(`No se pudo leer la imagen (status ${response.status})`);
+      const arrayBuffer = await response.arrayBuffer();
+
+      const { error } = await supabase.storage
+        .from('group-files')
+        .upload(filePath, arrayBuffer, { contentType, upsert: true });
+
+      if (error) throw new Error(`Error al subir avatar: ${error.message}`);
+
+      const { data: publicData } = supabase.storage
+        .from('group-files')
+        .getPublicUrl(filePath);
+
+      return `${publicData.publicUrl}?t=${Date.now()}`;
+    } catch (error) {
+      console.error('[FileStorage] Error en uploadUserAvatar:', error);
+      throw error;
+    }
+  };
+
+  /**
    * Obtener URL pública de un archivo
    * @param {string} filePath - Ruta del archivo
    * @returns {string}
@@ -177,6 +230,7 @@ export const FileStorageProvider = ({ children }) => {
       value={{
         uploadGroupFile,
         uploadGroupAvatar,
+        uploadUserAvatar,
         deleteGroupFile,
         getGroupFiles,
         getPublicUrl,

@@ -16,11 +16,12 @@ import {
   ScrollView,
   StatusBar,
 } from 'react-native';
+import LogoApp from '../../../assets/logo_app.svg';
 import Text from '../../components/AppText';
 import AppButton from '../../components/AppButton';
 import { useAccessibility } from '../../contexts/AccessibilityContext';
-import { Users, ChevronLeft, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react-native';
-import { registerUser } from '../../services/authService';
+import { ChevronLeft, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react-native';
+import { sendOtp } from '../../services/otpService';
 
 const shadow = (color, opacity, radius, offsetY, elevation) =>
   Platform.select({
@@ -35,7 +36,14 @@ const shadow = (color, opacity, radius, offsetY, elevation) =>
   });
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_REGEX = /^\+?[\d\s\-()]{7,15}$/;
+
+// Formatea el número al estilo "XXX XXX XXX" (máx. 9 dígitos)
+const fmtPhone = (v) => {
+  const d = v.replace(/\D/g, '').substring(0, 9);
+  if (d.length > 6) return `${d.substring(0, 3)} ${d.substring(3, 6)} ${d.substring(6)}`;
+  if (d.length > 3) return `${d.substring(0, 3)} ${d.substring(3)}`;
+  return d;
+};
 
 export default function RegisterScreen({ navigation }) {
   const { t } = useAccessibility();
@@ -64,7 +72,7 @@ export default function RegisterScreen({ navigation }) {
       : null,
     phone: !phone.trim()
       ? t('phoneTooShort')
-      : !PHONE_REGEX.test(phone.trim())
+      : phone.replace(/\D/g, '').length < 9
       ? t('phoneInvalid')
       : null,
     password: !password
@@ -94,12 +102,21 @@ export default function RegisterScreen({ navigation }) {
     if (!isValid) return;
 
     setLoading(true);
-    const result = await registerUser(email.trim(), password, name.trim(), phone.trim());
+    const result = await sendOtp(email.trim(), name.trim());
     setLoading(false);
 
     if (!result.success) {
       Alert.alert(t('error'), result.error);
+      return;
     }
+
+    // Navegar a la pantalla de verificación con los datos del formulario
+    navigation.navigate('OtpVerification', {
+      email   : email.trim(),
+      password,
+      name    : name.trim(),
+      phone   : phone.trim(),
+    });
   };
 
   return (
@@ -125,9 +142,7 @@ export default function RegisterScreen({ navigation }) {
           </AppButton>
 
           {/* Logo */}
-          <View style={styles.logoContainer}>
-            <Users color="#FFFFFF" size={32} />
-          </View>
+          <LogoApp width={100} height={100} style={styles.logoImage} />
 
           <Text style={styles.title}>{t('registerTitle')}</Text>
           <Text style={styles.subtitle}>{t('registerSubtitle')}</Text>
@@ -172,14 +187,15 @@ export default function RegisterScreen({ navigation }) {
               <Text style={styles.label}>{t('phoneNumber').toUpperCase()}</Text>
               <TextInput
                 style={[styles.input, touched.phone && errors.phone && styles.inputError]}
-                placeholder={t('examplePhone')}
+                placeholder="999 999 999"
                 placeholderTextColor="#9CA3AF"
-                keyboardType="phone-pad"
+                keyboardType="numeric"
+                maxLength={11}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(v) => { setPhone(fmtPhone(v)); touch('phone'); }}
                 onBlur={() => touch('phone')}
                 accessibilityLabel="Campo número de teléfono"
-                accessibilityHint="Ingresa tu número de teléfono"
+                accessibilityHint="Ingresa tu número de teléfono de 9 dígitos"
               />
               {touched.phone && errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
             </View>
@@ -193,7 +209,7 @@ export default function RegisterScreen({ navigation }) {
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPwd}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => { setPassword(text); touch('password'); }}
                   onBlur={() => touch('password')}
                   accessibilityLabel="Campo contraseña"
                   accessibilityHint="Ingresa una contraseña segura de al menos 8 caracteres"
@@ -264,7 +280,7 @@ export default function RegisterScreen({ navigation }) {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.buttonText}>{t('register').toUpperCase()}</Text>
+                <Text style={styles.buttonText}>CONTINUAR</Text>
               )}
             </AppButton>
           </View>
@@ -302,15 +318,10 @@ const styles = StyleSheet.create({
     left: 24,
     padding: 4,
   },
-  logoContainer: {
-    width: 64,
-    height: 64,
-    backgroundColor: '#4F46E5',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 100,
+    height: 100,
     marginBottom: 16,
-    ...shadow('rgba(79,70,229,0.3)', 0.3, 8, 4, 6),
   },
   title: {
     fontSize: 24,

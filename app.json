@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "StudySyncApp",
+    "name": "StudySync",
     "slug": "StudySyncApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"

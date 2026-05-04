@@ -3,9 +3,11 @@
 // Input fijo al teclado + chat ocupa toda la pantalla
 // ============================================
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Animated,
+  Easing,
+  PanResponder,
   View,
   TextInput,
   TouchableOpacity,
@@ -23,26 +25,182 @@ import {
 import Text from "../../components/AppText";
 import GroupAvatar from "../../components/GroupAvatar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, Send, Star, UsersRound, MoreVertical, Pencil, Trash2, BarChart2, Shuffle, Plus, X } from "lucide-react-native";
+import { ChevronLeft, Send, Star, UsersRound, Wrench, Pencil, Trash2, BarChart2, Shuffle, Plus, X, CornerUpLeft } from "lucide-react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import * as firestoreService from "../../services/firestoreService";
-import { formatTime } from "../../utils/dateUtils";
+import {
+  formatTimeInTimeZone,
+  getCalendarDateKeyInTimeZone,
+  formatChatDateSeparatorLabel,
+} from "../../utils/dateUtils";
+import { Audio } from "expo-av";
+import { notifyNewMessage } from "../../services/notificationService";
+
+// ── Typing bubble con 3 dots animados ────────────────────────
+// React.memo evita que se re-renderice (y se reinicie la animación)
+// cuando el padre re-renderiza por cambios de estado no relacionados (ej. hasText).
+const TypingBubble = React.memo(function TypingBubble({ names, theme, isDark }) {
+  const dot0 = useRef(new Animated.Value(0)).current;
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const BOUNCE  = 260;   // ms para subir o bajar
+    const STAGGER = 140;   // ms entre cada dot
+    const PAUSE   = STAGGER * 2; // pausa al final para que el ciclo sea simétrico
+
+    // Cada dot corre su propio loop con un delay de arranque diferente.
+    // Duración total del loop: startDelay + BOUNCE + BOUNCE + (PAUSE - startDelay)
+    //                        = BOUNCE*2 + PAUSE  →  igual para los 3 dots.
+    const makeLoop = (value, startDelay) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(startDelay),
+          Animated.timing(value, {
+            toValue: -7,
+            duration: BOUNCE,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(value, {
+            toValue: 0,
+            duration: BOUNCE,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.delay(PAUSE - startDelay),
+        ])
+      );
+
+    const a0 = makeLoop(dot0, 0);
+    const a1 = makeLoop(dot1, STAGGER);
+    const a2 = makeLoop(dot2, STAGGER * 2);
+    a0.start();
+    a1.start();
+    a2.start();
+    return () => { a0.stop(); a1.stop(); a2.stop(); };
+  }, []);
+
+  const label = names.length === 1
+    ? `${names[0]} está escribiendo`
+    : `${names.join(', ')} están escribiendo`;
+
+  return (
+    <View style={typingStyles.wrapper}>
+      <Text style={[typingStyles.name, { color: theme.textSecondary }]}>{label}</Text>
+      <View style={[typingStyles.bubble, {
+        backgroundColor: theme.card,
+        borderColor: theme.border,
+      }]}>
+        {[dot0, dot1, dot2].map((dot, i) => (
+          <Animated.View
+            key={i}
+            style={[typingStyles.dot, {
+              backgroundColor: isDark ? '#6B7280' : '#9CA3AF',
+              transform: [{ translateY: dot }],
+            }]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+});
+
+const typingStyles = StyleSheet.create({
+  wrapper: { alignSelf: 'flex-start', marginBottom: 8, marginTop: 4 },
+  name: { fontSize: 11, fontWeight: '600', marginBottom: 4, marginLeft: 4 },
+  bubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
+    borderTopLeftRadius: 4,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    elevation: 1,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+});
+
+// ── Swipeable wrapper for reply gesture ──────────────────────
+function SwipeableMessage({ onSwipeRight, children }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        g.dx > 8 && Math.abs(g.dy) < 25,
+      onPanResponderMove: (_, g) => {
+        if (g.dx > 0) translateX.setValue(Math.min(g.dx * 0.6, 72));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx > 50) {
+          Vibration.vibrate(30);
+          onSwipeRight();
+        }
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 200,
+          friction: 12,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      style={{ transform: [{ translateX }] }}
+      {...panResponder.panHandlers}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function ChatScreen({ route, navigation }) {
-  const { groupId } = route.params;
-  const { user } = useAuth();
+  const {
+    groupId,
+    groupName: routeGroupName,
+    groupPhotoURL: routeGroupPhoto,
+    highlightMessageId = null,
+    _ts: highlightTs = null,
+  } = route.params || {};
+  const { user, userProfile } = useAuth();
   const { theme, isDark } = useTheme();
   const { t } = useAccessibility();
   const insets = useSafeAreaInsets();
+  const isSubscriber = (userProfile?.plan || "free") === "personal";
 
-  const [group, setGroup] = useState(null);
+  // Placeholder inmediato si la navegación trae nombre/foto (evita pantalla en blanco hasta getGroup).
+  const [group, setGroup] = useState(() =>
+    routeGroupName
+      ? {
+          id: groupId,
+          name: routeGroupName,
+          photoURL: routeGroupPhoto ?? null,
+          members: [],
+        }
+      : null,
+  );
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [onlineMembers, setOnlineMembers] = useState([]);
   const [showOnline, setShowOnline] = useState(false);
-  const keyboardAnim = useRef(new Animated.Value(0)).current;
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const keyboardOffset = useRef(new Animated.Value(0)).current;
   const [hasText, setHasText] = useState(false);
   const [actionMsg, setActionMsg] = useState(null);
   const [editingMsg, setEditingMsg] = useState(null);
@@ -62,7 +220,15 @@ export default function ChatScreen({ route, navigation }) {
   const [rouletteResult, setRouletteResult] = useState(null);
   const [rouletteCurrent, setRouletteCurrent] = useState("");
   const rouletteTimerRef = useRef(null);
-  const inputValueRef = useRef("");
+  const [replyingTo, setReplyingTo] = useState(null); // { id, text, authorId }
+  const [mentionQuery, setMentionQuery] = useState(null); // string after '@' or null
+  const [typingUserIds, setTypingUserIds] = useState([]);
+  const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+  const processedHighlightRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const typingSoundRef = useRef(null);
+  const [inputText, setInputText] = useState("");   // valor controlado del TextInput
+  const inputValueRef = useRef("");                  // copia ref para handleSend (sin stale closure)
   const textInputRef = useRef(null);
   const flatListRef = useRef(null);
 
@@ -78,18 +244,29 @@ export default function ChatScreen({ route, navigation }) {
         setGroup(groupData);
 
         if (groupData?.members) {
-          const memberData = await firestoreService.getUsersByIds(
-            groupData.members,
-          );
-          if (cancelled) return;
-          setMembers(memberData);
-
-          // Escuchar miembros en línea
+          // Online subscription — no necesita perfiles completos
           unsubOnline = firestoreService.getOnlineMembers(
             groupId,
             groupData.members,
             (online) => { if (!cancelled) setOnlineMembers(online); }
           );
+
+          // Lanzar el fetch de red inmediatamente (no bloqueante aún)
+          const membersFetchPromise = firestoreService.getUsersByIds(groupData.members);
+
+          // Mientras tanto leer caché de AsyncStorage para mostrar nombres al instante
+          try {
+            const cached = await AsyncStorage.getItem(`@members_${groupId}`);
+            if (cached && !cancelled) {
+              setMembers(JSON.parse(cached));
+            }
+          } catch {}
+
+          // Esperar la respuesta fresca y actualizar estado + caché
+          const memberData = await membersFetchPromise;
+          if (cancelled) return;
+          setMembers(memberData);
+          AsyncStorage.setItem(`@members_${groupId}`, JSON.stringify(memberData)).catch(() => {});
         }
       } catch (e) {
         console.error("Error cargando grupo:", e);
@@ -97,21 +274,7 @@ export default function ChatScreen({ route, navigation }) {
     };
     loadGroup();
 
-    // Marcar presencia
-    let clearPresence;
-    if (user?.uid) {
-      firestoreService.setUserPresence(user.uid, groupId).catch(() => {});
-
-      // Refrescar presencia cada 90 segundos
-      const presenceInterval = setInterval(() => {
-        if (!cancelled) firestoreService.setUserPresence(user.uid, groupId).catch(() => {});
-      }, 90000);
-
-      clearPresence = () => {
-        clearInterval(presenceInterval);
-        firestoreService.clearUserPresence(user.uid).catch(() => {});
-      };
-    }
+    // La presencia (online/offline) se gestiona globalmente en AppNavigator.
 
     const unsubMessages = firestoreService.getGroupMessages(
       groupId,
@@ -120,6 +283,10 @@ export default function ChatScreen({ route, navigation }) {
         setMessages(fetchedMessages);
       },
     );
+
+    const unsubTyping = firestoreService.onTypingStatus(groupId, user?.uid, (ids) => {
+      if (!cancelled) setTypingUserIds(ids);
+    });
 
     if (user?.uid) {
       firestoreService
@@ -131,51 +298,200 @@ export default function ChatScreen({ route, navigation }) {
       cancelled = true;
       unsubMessages();
       unsubOnline();
-      clearPresence?.();
+      unsubTyping();
       if (rouletteTimerRef.current) clearTimeout(rouletteTimerRef.current);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (user?.uid) firestoreService.setTypingStatus(groupId, user.uid, false).catch(() => {});
     };
   }, [groupId, user]);
 
-  // Android: mover input cuando el teclado aparece/desaparece
+  // Preload typing sound
   useEffect(() => {
-    if (Platform.OS !== "android") return;
-    const show = Keyboard.addListener("keyboardDidShow", (e) => {
-      keyboardAnim.setValue(e.endCoordinates.height);
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      keyboardAnim.setValue(0);
-    });
-    return () => { show.remove(); hide.remove(); };
+    let sound;
+    Audio.Sound.createAsync(require('../../../assets/sounds/typing.wav'))
+      .then(({ sound: s }) => { sound = s; typingSoundRef.current = s; })
+      .catch(() => {});
+    return () => { sound?.unloadAsync().catch(() => {}); };
+  }, []);
+
+  useEffect(() => {
+    if (!isSubscriber) {
+      setShowExtraMenu(false);
+      setShowPollModal(false);
+      setShowRouletteModal(false);
+    }
+  }, [isSubscriber]);
+
+  // Scroll + highlight message cuando se llega desde una notificación de mención.
+  // IMPORTANTE: usamos `messages.length` en las deps (no `messageList.length`) porque
+  // `messageList` se declara más abajo con useMemo; evaluarlo aquí causaría un TypeError
+  // por variable no inicializada en el momento en que React evalúa el array de dependencias.
+  useEffect(() => {
+    if (!highlightMessageId || !messages.length) return;
+    if (processedHighlightRef.current === highlightTs) return;
+    processedHighlightRef.current = highlightTs;
+
+    // messageList sí está disponible dentro del callback (corre tras el render)
+    const idx = messageList.findIndex((item) => item.id === highlightMessageId);
+    if (idx >= 0) {
+      setHighlightedMsgId(highlightMessageId);
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+      }, 350);
+      // Quitar el resaltado después de 3 segundos
+      setTimeout(() => setHighlightedMsgId(null), 3500);
+    }
+    // Limpiar params para evitar re-disparo
+    navigation.setParams({ highlightMessageId: undefined, _ts: undefined });
+  }, [highlightMessageId, highlightTs, messages.length]);
+
+  // Play sound when someone starts typing
+  const prevTypingLenRef = useRef(0);
+  useEffect(() => {
+    if (typingUserIds.length > 0 && prevTypingLenRef.current === 0) {
+      typingSoundRef.current?.replayAsync().catch(() => {});
+    }
+    prevTypingLenRef.current = typingUserIds.length;
+  }, [typingUserIds]);
+
+  // Keyboard: Android usa Animated offset, iOS usa KAV
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      const show = Keyboard.addListener("keyboardDidShow", (e) => {
+        keyboardOffset.setValue(e.endCoordinates.height);
+      });
+      const hide = Keyboard.addListener("keyboardDidHide", () => {
+        keyboardOffset.setValue(0);
+      });
+      return () => { show.remove(); hide.remove(); };
+    }
   }, []);
 
   const handleSend = async () => {
     const textToSend = inputValueRef.current.trim();
     if (!textToSend) return;
 
-    textInputRef.current?.clear();
+    const currentReply = replyingTo;
+    const now = new Date();
+    const msgCreatedAt = now.toISOString();
+    const msgTime = formatTimeInTimeZone(msgCreatedAt);
+    const myName = members.find((m) => m.id === user.uid)?.name || user?.displayName || '';
+
+    setInputText("");
     inputValueRef.current = "";
     setHasText(false);
+    setReplyingTo(null);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (user?.uid) firestoreService.setTypingStatus(groupId, user.uid, false).catch(() => {});
+
+    // Scroll al mensaje enviado
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+
+    // Optimistic update: muestra el mensaje inmediatamente
+    const optimisticMsg = {
+      id: `temp_${now.getTime()}`,
+      authorId: user.uid,
+      authorName: myName,
+      text: textToSend,
+      time: msgTime,
+      createdAt: msgCreatedAt,
+      important: false,
+      ...(currentReply && { replyTo: { id: currentReply.id, text: currentReply.text, authorId: currentReply.authorId, authorName: currentReply.authorName } }),
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    textInputRef.current?.focus();
 
     try {
-      await firestoreService.sendMessage({
+      const msgId = await firestoreService.sendMessage({
         groupId,
         authorId: user.uid,
+        authorName: myName,
         text: textToSend,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        time: msgTime,
         important: false,
+        ...(currentReply && { replyTo: { id: currentReply.id, text: currentReply.text, authorId: currentReply.authorId, authorName: currentReply.authorName } }),
       });
+
+      // ── Notificaciones de mención (@nombre o @todos) ────────────
+      const tokens = textToSend.match(/@\w+/g) || [];
+      if (tokens.length > 0) {
+        const senderName = members.find((m) => m.id === user.uid)?.name || 'Alguien';
+        const mentionAll = tokens.some((t) => t.toLowerCase() === '@todos');
+        let targetIds = [];
+
+        if (mentionAll) {
+          // Para @todos usamos group.members (array de UIDs cargado con el grupo),
+          // más fiable que el estado `members` que depende de getUsersByIds.
+          targetIds = (group?.members || []).filter((uid) => uid !== user.uid);
+        } else {
+          // Buscar miembro cuyo nombre comienza con el token (@Bryan → Bryan).
+          // Null-safety en m.name para evitar TypeError si algún perfil no tiene nombre.
+          tokens.forEach((token) => {
+            const q = token.slice(1).toLowerCase();
+            const member = members.find(
+              (m) => (m.name || m.displayName || '').toLowerCase().startsWith(q)
+            );
+            if (member && member.id !== user.uid) targetIds.push(member.id);
+          });
+          targetIds = [...new Set(targetIds)];
+        }
+
+        if (targetIds.length > 0) {
+          const preview = textToSend.length > 60 ? `${textToSend.slice(0, 60)}…` : textToSend;
+          const notifBody = mentionAll
+            ? `${senderName} mencionó a todos los integrantes: "${preview}"`
+            : `${senderName} te mencionó: "${preview}"`;
+          targetIds.forEach((uid) => {
+            firestoreService.createNotification(uid, {
+              type: 'mention',
+              title: group?.name || 'Grupo',
+              body: notifBody,
+              bodyKey: mentionAll ? 'notifMentionAllBody' : 'notifMentionUserBody',
+              notifParams: { sender: senderName, preview },
+              data: { groupId, messageId: msgId },
+            }).catch((err) => console.warn('[mention-notif]', err?.message));
+          });
+        }
+      }
+
+      // Notificar a los demás miembros (fire-and-forget)
+      const senderName = members.find((m) => m.id === user.uid)?.name || 'Alguien';
+      notifyNewMessage({
+        groupId,
+        senderId: user.uid,
+        senderName,
+        messageText: textToSend,
+        groupName: group?.name || 'Chat',
+      }).catch(() => {});
     } catch (e) {
       console.error("Error enviando mensaje:", e);
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
     }
-    textInputRef.current?.focus();
   };
 
   const handleToggleImportant = async (msgId, currentValue) => {
     await firestoreService.toggleMessageImportant(msgId, currentValue);
   };
+
+  const handleSelectMention = (memberName) => {
+    const text = inputValueRef.current;
+    // Reemplaza el @query al final del texto con @nombre + espacio
+    const newText = text.replace(/@([^\s@]*)$/, `@${memberName} `);
+    // Actualizar estado controlado (confiable) + ref (para handleSend sin stale closure).
+    // setNativeProps fue reemplazado porque en Android no dispara onChangeText,
+    // dejando ref y valor nativo desfasados en la segunda mención.
+    inputValueRef.current = newText;
+    setInputText(newText);
+    setHasText(true);
+    setMentionQuery(null);
+  };
+
+  const mentionSuggestions = mentionQuery !== null
+    ? members.filter((m) =>
+        m.id !== user?.uid &&
+        (m.name || m.displayName || '').toLowerCase().startsWith(mentionQuery.toLowerCase())
+      )
+    : [];
 
   const handleLongPress = (msg) => {
     if (msg.authorId !== user.uid) return; // solo mensajes propios
@@ -229,19 +545,22 @@ export default function ChatScreen({ route, navigation }) {
 
   // ── Poll ─────────────────────────────────────────────────────
   const handleSendPoll = async () => {
+    if (!isSubscriber) return;
     const validOptions = pollOptions.filter((o) => o.trim());
     if (!pollQuestion.trim() || validOptions.length < 2) return;
     const votes = {};
     validOptions.forEach((_, i) => { votes[String(i)] = []; });
+    const myName = members.find((m) => m.id === user.uid)?.name || user?.displayName || '';
     await firestoreService.sendMessage({
       groupId,
       authorId: user.uid,
+      authorName: myName,
       type: "poll",
       question: pollQuestion.trim(),
       options: validOptions.map((o) => o.trim()),
       votes,
       text: `📊 Encuesta: ${pollQuestion.trim()}`,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      time: formatTimeInTimeZone(new Date().toISOString()),
       important: false,
     });
     setPollQuestion("");
@@ -249,12 +568,65 @@ export default function ChatScreen({ route, navigation }) {
     setShowPollModal(false);
   };
 
-  const handleVotePoll = async (messageId, optionIndex) => {
-    await firestoreService.votePoll(messageId, optionIndex, user.uid);
-  };
+  const pollVoteLockRef = useRef(new Set());
+  const pollVoteFoundRef = useRef(false);
+
+  const mergePollVoteLocal = useCallback((votes, optionIndex, userId) => {
+    const newVotes = {};
+    const keys = Object.keys(votes || {});
+    keys.forEach((key) => {
+      newVotes[key] = [...(votes[key] || []).filter((id) => id !== userId)];
+    });
+    const k = String(optionIndex);
+    newVotes[k] = [...(newVotes[k] || []), userId];
+    return newVotes;
+  }, []);
+
+  const handleVotePoll = useCallback(
+    async (messageId, optionIndex) => {
+      if (!user?.uid) return;
+      if (pollVoteLockRef.current.has(messageId)) return;
+      pollVoteLockRef.current.add(messageId);
+      pollVoteFoundRef.current = false;
+
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === messageId && m.type === "poll");
+        if (idx < 0) return prev;
+        pollVoteFoundRef.current = true;
+        const old = prev[idx];
+        const next = [...prev];
+        next[idx] = {
+          ...old,
+          votes: mergePollVoteLocal(old.votes, optionIndex, user.uid),
+        };
+        return next;
+      });
+
+      if (!pollVoteFoundRef.current) {
+        pollVoteLockRef.current.delete(messageId);
+        return;
+      }
+
+      try {
+        await firestoreService.votePoll(messageId, optionIndex, user.uid);
+      } catch (e) {
+        console.warn("[votePoll]", e?.message);
+        const fresh = await firestoreService.getMessageById(messageId);
+        if (fresh) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === messageId ? { ...m, ...fresh } : m)),
+          );
+        }
+      } finally {
+        pollVoteLockRef.current.delete(messageId);
+      }
+    },
+    [user?.uid, mergePollVoteLocal],
+  );
 
   // ── Roulette ─────────────────────────────────────────────────
   const handleSpin = () => {
+    if (!isSubscriber) return;
     const items = rouletteItems.filter((i) => i.trim());
     if (items.length < 2) return;
     setRouletteSpinning(true);
@@ -295,17 +667,19 @@ export default function ChatScreen({ route, navigation }) {
   };
 
   const handleSendRouletteResult = async () => {
-    if (!rouletteResult) return;
+    if (!isSubscriber || !rouletteResult) return;
     const validItems = rouletteItems.filter((i) => i.trim());
+    const myName = members.find((m) => m.id === user.uid)?.name || user?.displayName || '';
     await firestoreService.sendMessage({
       groupId,
       authorId: user.uid,
+      authorName: myName,
       type: "roulette",
       rouletteTitle: rouletteTitle.trim() || null,
       rouletteWinner: rouletteResult,
       rouletteItems: validItems,
       text: `🎡 Sorteo: ${rouletteResult}`,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      time: formatTimeInTimeZone(new Date().toISOString()),
       important: false,
     });
     setShowRouletteModal(false);
@@ -315,46 +689,41 @@ export default function ChatScreen({ route, navigation }) {
     setRouletteTitle("");
   };
 
-  const getMemberName = (authorId) => {
+  const getMemberName = (authorId, fallbackName) => {
     const member = members.find((m) => m.id === authorId);
-    return member?.name || "Usuario";
+    return member?.name || fallbackName || "Usuario";
   };
 
   const isLeaderMember = (authorId) => group?.leaderId === authorId;
 
-  // ── Separadores de fecha ──────────────────────────────────────
-  const getDateKey = (createdAt) => {
-    if (!createdAt) return "unknown";
-    return createdAt.split("T")[0]; // YYYY-MM-DD
-  };
-
-  const formatSeparatorLabel = (dateKey) => {
-    if (dateKey === "unknown") return "";
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const date = new Date(dateKey + "T00:00:00");
-    if (date.toDateString() === today.toDateString()) return "Hoy";
-    if (date.toDateString() === yesterday.toDateString()) return "Ayer";
-    if (date.getFullYear() === today.getFullYear())
-      return date.toLocaleDateString("es-ES", { day: "numeric", month: "long" });
-    return date.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
-  };
-
+  // ── Separadores de fecha (calendario Perú — America/Lima) ─────
   const buildMessageList = (msgs) => {
     const result = [];
     let lastDate = null;
     for (const msg of msgs) {
-      const dateKey = getDateKey(msg.createdAt);
+      const dateKey = getCalendarDateKeyInTimeZone(msg.createdAt);
       if (dateKey !== lastDate) {
-        result.push({ type: "separator", id: `sep_${dateKey}`, label: formatSeparatorLabel(dateKey) });
+        result.push({
+          type: "separator",
+          id: `sep_${dateKey}`,
+          label: formatChatDateSeparatorLabel(dateKey),
+        });
         lastDate = dateKey;
       }
       result.push(msg);
     }
-    return result;
+    return result.reverse();
   };
+
+  // Memoize so FlatList doesn't re-render all messages when typingUserIds changes
+  const messageList = useMemo(() => buildMessageList(messages), [messages]);
+
+  // Estabilizar el array de nombres para que React.memo en TypingBubble
+  // no vea un prop nuevo en cada re-render por tecla escrita.
+  const typingNames = useMemo(
+    () => typingUserIds.map((id) => getMemberName(id)),
+    [typingUserIds, members],
+  );
 
   const renderPollMessage = (msg) => {
     const totalVotes = Object.values(msg.votes || {}).reduce((s, arr) => s + arr.length, 0);
@@ -384,7 +753,7 @@ export default function ChatScreen({ route, navigation }) {
                   <Text style={[styles.pollOptionText, { color: voted ? "#6366F1" : theme.text }]} numberOfLines={1}>{opt}</Text>
                   <Text style={[styles.pollPct, { color: voted ? "#6366F1" : theme.textMuted }]}>{pct}%</Text>
                 </View>
-                <View style={[styles.pollBarTrack, { backgroundColor: isDark ? "#374151" : "#E5E7EB" }]}>
+                <View style={[styles.pollBarTrack, { backgroundColor: theme.dark ? "#374151" : "#E5E7EB" }]}>
                   <View style={[styles.pollBarFill, { width: `${pct}%`, backgroundColor: voted ? "#6366F1" : "#A5B4FC" }]} />
                 </View>
               </TouchableOpacity>
@@ -398,7 +767,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const renderRouletteMessage = (msg) => (
     <View style={styles.rouletteMsgWrapper}>
-      <View style={[styles.rouletteBubble, { backgroundColor: isDark ? "#1E1B4B" : "#EEF2FF", borderColor: "#6366F1" }]}>
+      <View style={[styles.rouletteBubble, { backgroundColor: theme.dark ? "#1E1B4B" : "#EEF2FF", borderColor: "#6366F1" }]}>
         {/* Header */}
         <View style={styles.rouletteHeaderRow}>
           <Text style={styles.rouletteEmoji}>🎡</Text>
@@ -409,14 +778,14 @@ export default function ChatScreen({ route, navigation }) {
               <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>{t('rouletteTitle')}</Text>
             )}
             <Text style={[styles.rouletteMsgSub, { color: theme.textSecondary }]}>
-              Lanzado por {getMemberName(msg.authorId)}
+              Lanzado por {getMemberName(msg.authorId, msg.authorName)}
             </Text>
           </View>
         </View>
 
         {/* Lista de participantes */}
         {(msg.rouletteItems || []).length > 0 && (
-          <View style={[styles.rouletteList, { borderColor: isDark ? "#312E81" : "#C7D2FE" }]}>
+          <View style={[styles.rouletteList, { borderColor: theme.dark ? "#312E81" : "#C7D2FE" }]}>
             {(msg.rouletteItems || []).map((item, i) => {
               const isWinner = item === msg.rouletteWinner;
               return (
@@ -424,7 +793,7 @@ export default function ChatScreen({ route, navigation }) {
                   key={i}
                   style={[
                     styles.rouletteListItem,
-                    isWinner && { backgroundColor: isDark ? "#312E81" : "#E0E7FF" },
+                    isWinner && { backgroundColor: theme.dark ? "#312E81" : "#E0E7FF" },
                   ]}
                 >
                   <Text style={[styles.rouletteListNum, { color: isWinner ? "#4F46E5" : theme.textMuted }]}>
@@ -447,15 +816,15 @@ export default function ChatScreen({ route, navigation }) {
         )}
 
         {/* Ganador destacado */}
-        <View style={[styles.rouletteWinnerBox, { backgroundColor: isDark ? "#312E81" : "#DDD6FE" }]}>
-          <Text style={[styles.rouletteWinnerLabel, { color: isDark ? "#A5B4FC" : "#4338CA" }]}>¡Le tocó!</Text>
-          <Text style={[styles.rouletteWinner, { color: isDark ? "#E0E7FF" : "#3730A3" }]}>
+        <View style={[styles.rouletteWinnerBox, { backgroundColor: theme.dark ? "#312E81" : "#DDD6FE" }]}>
+          <Text style={[styles.rouletteWinnerLabel, { color: theme.dark ? "#A5B4FC" : "#4338CA" }]}>¡Le tocó!</Text>
+          <Text style={[styles.rouletteWinner, { color: theme.dark ? "#E0E7FF" : "#3730A3" }]}>
             {msg.rouletteWinner}
           </Text>
         </View>
 
         <Text style={[styles.rouletteMsgTime, { color: theme.textMuted }]}>
-          {msg.time || formatTime(msg.createdAt)}
+          {msg.createdAt ? formatTimeInTimeZone(msg.createdAt) : msg.time || ""}
         </Text>
       </View>
     </View>
@@ -465,11 +834,11 @@ export default function ChatScreen({ route, navigation }) {
     if (item.type === "separator") {
       return (
         <View style={styles.dateSeparator}>
-          <View style={[styles.dateSeparatorLine, { backgroundColor: isDark ? "#374151" : "#D1D5DB" }]} />
-          <View style={[styles.dateSeparatorChip, { backgroundColor: isDark ? "#374151" : "#E5E7EB" }]}>
+          <View style={[styles.dateSeparatorLine, { backgroundColor: theme.dark ? "#374151" : "#D1D5DB" }]} />
+          <View style={[styles.dateSeparatorChip, { backgroundColor: theme.dark ? "#374151" : "#E5E7EB" }]}>
             <Text style={[styles.dateSeparatorText, { color: theme.textSecondary }]}>{item.label}</Text>
           </View>
-          <View style={[styles.dateSeparatorLine, { backgroundColor: isDark ? "#374151" : "#D1D5DB" }]} />
+          <View style={[styles.dateSeparatorLine, { backgroundColor: theme.dark ? "#374151" : "#D1D5DB" }]} />
         </View>
       );
     }
@@ -480,91 +849,113 @@ export default function ChatScreen({ route, navigation }) {
 
   const renderMessage = ({ item: msg }) => {
     const isMe = msg.authorId === user.uid;
-    const authorName = getMemberName(msg.authorId);
+    const authorName = getMemberName(msg.authorId, msg.authorName);
     const isLeader = isLeaderMember(msg.authorId);
+    const isHighlighted = msg.id === highlightedMsgId;
+
+    const replyAuthorName = msg.replyTo
+      ? (msg.replyTo.authorId === user.uid ? 'Tú' : getMemberName(msg.replyTo.authorId, msg.replyTo.authorName))
+      : null;
 
     return (
-      <View
-        style={[
-          styles.messageWrapper,
-          isMe ? styles.messageWrapperMe : styles.messageWrapperOther,
-        ]}
-      >
-        {!isMe && (
-          <Text style={[styles.authorName, { color: theme.textSecondary }]}>
-            {authorName} {isLeader ? `(${t('leader')})` : ""}
-          </Text>
-        )}
-        <TouchableOpacity
-          onLongPress={() => handleLongPress(msg)}
-          activeOpacity={0.85}
-          delayLongPress={350}
+      <SwipeableMessage onSwipeRight={() => setReplyingTo(msg)}>
+        <View
+          style={[
+            styles.messageWrapper,
+            isMe ? styles.messageWrapperMe : styles.messageWrapperOther,
+            isHighlighted && styles.messageWrapperHighlighted,
+          ]}
         >
-          <View
-            style={[styles.bubble, isMe ? styles.bubbleMe : [styles.bubbleOther, { backgroundColor: theme.card, borderColor: theme.border }]]}
+          {!isMe && (
+            <Text style={[styles.authorName, { color: theme.textSecondary }]}>
+              {authorName} {isLeader ? `(${t('leader')})` : ""}
+            </Text>
+          )}
+          <TouchableOpacity
+            onLongPress={() => handleLongPress(msg)}
+            activeOpacity={0.85}
+            delayLongPress={350}
           >
-            <View style={styles.messageTextContainer}>
-              <Text style={[styles.messageText, isMe ? styles.messageTextMe : { color: theme.text }]}>
-                {msg.text.split(/(@\w+)/g).map((part, index) =>
-                  part.startsWith("@") ? (
-                    <Text key={index} style={styles.mention}>{part}</Text>
-                  ) : (
-                    <Text key={index}>{part}</Text>
-                  ),
-                )}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => handleToggleImportant(msg.id, msg.important)}
-              style={styles.starButtonAbsolute}
+            <View
+              style={[styles.bubble, isMe ? styles.bubbleMe : [styles.bubbleOther, { backgroundColor: theme.card, borderColor: theme.border }]]}
             >
-              <Star
-                color={
-                  msg.important
-                    ? "#FACC15"
-                    : isMe
-                      ? "rgba(165,180,252,0.5)"
-                      : "#D1D5DB"
-                }
-                size={16}
-                fill={msg.important ? "#FACC15" : "none"}
-              />
-            </TouchableOpacity>
-            <View style={styles.messageFooter}>
-              {msg.edited && (
-                <Text style={[styles.editedLabel, isMe ? styles.editedLabelMe : styles.editedLabelOther]}>
-                  editado
-                </Text>
+              {/* Reply quote */}
+              {msg.replyTo && (
+                <View style={[styles.replyQuote, {
+                  borderLeftColor: isMe ? 'rgba(255,255,255,0.5)' : '#6366F1',
+                  backgroundColor: isMe ? 'rgba(0,0,0,0.18)' : (theme.dark ? '#1F2937' : '#EEF2FF'),
+                }]}>
+                  <Text style={[styles.replyQuoteAuthor, { color: isMe ? 'rgba(255,255,255,0.85)' : '#6366F1' }]} numberOfLines={1}>
+                    {replyAuthorName}
+                  </Text>
+                  <Text style={[styles.replyQuoteText, { color: isMe ? 'rgba(255,255,255,0.65)' : theme.textSecondary }]} numberOfLines={2}>
+                    {msg.replyTo.text}
+                  </Text>
+                </View>
               )}
-              <Text
-                style={[
-                  styles.messageTime,
-                  isMe ? styles.messageTimeMe : styles.messageTimeOther,
-                ]}
+              <View style={styles.messageTextContainer}>
+                <Text style={[styles.messageText, isMe ? styles.messageTextMe : { color: theme.text }]}>
+                  {msg.text.split(/(@\w+)/g).map((part, index) =>
+                    part.startsWith("@") ? (
+                      <Text key={index} style={[styles.mention, { color: isMe ? 'rgba(255,255,255,0.95)' : '#4F46E5' }]}>{part}</Text>
+                    ) : (
+                      <Text key={index}>{part}</Text>
+                    ),
+                  )}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => handleToggleImportant(msg.id, msg.important)}
+                style={styles.starButtonAbsolute}
               >
-                {msg.time || formatTime(msg.createdAt)}
-              </Text>
+                <Star
+                  color={
+                    msg.important
+                      ? "#FACC15"
+                      : isMe
+                        ? "rgba(165,180,252,0.5)"
+                        : "#D1D5DB"
+                  }
+                  size={16}
+                  fill={msg.important ? "#FACC15" : "none"}
+                />
+              </TouchableOpacity>
+              <View style={styles.messageFooter}>
+                {msg.edited && (
+                  <Text style={[styles.editedLabel, isMe ? styles.editedLabelMe : styles.editedLabelOther]}>
+                    editado
+                  </Text>
+                )}
+                <Text
+                  style={[
+                    styles.messageTime,
+                    isMe ? styles.messageTimeMe : styles.messageTimeOther,
+                  ]}
+                >
+                  {msg.createdAt ? formatTimeInTimeZone(msg.createdAt) : msg.time || ""}
+                </Text>
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
+      </SwipeableMessage>
     );
   };
 
   if (!group) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: isDark ? "#111827" : "#E5E7EB" }]}>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.bg }]}>
         <Text style={[styles.loadingText, { color: theme.textSecondary }]}>{t('loading')}</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? "#111827" : "#E5E7EB" }]}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.headerBg }]}>
+      <View style={[styles.header, { backgroundColor: theme.headerBg }]} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -581,6 +972,7 @@ export default function ChatScreen({ route, navigation }) {
             name={group.name}
             size={36}
             borderRadius={10}
+            onColoredHeader
             style={{ marginRight: 8 }}
           />
           <View style={{ flex: 1 }}>
@@ -605,70 +997,155 @@ export default function ChatScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Mensajes */}
-      <FlatList
-        ref={flatListRef}
-        style={styles.messagesContainer}
-        data={buildMessageList(messages)}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={[styles.messagesList, { paddingBottom: 8 }]}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled
-        nestedScrollEnabled
-        keyboardDismissMode="on-drag"
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({ animated: false })
-        }
-        ListHeaderComponent={
-          <View style={styles.reminderBanner}>
-            <Text style={styles.reminderText}>
-              💡 {t('chatReminderMsg')} <Text style={styles.reminderBold}>{group.name}</Text>.
-            </Text>
-          </View>
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyChat}>
-            <Text style={[styles.emptyChatText, { color: theme.textSecondary }]}>
-              {t('chatEmpty')}
-            </Text>
-          </View>
-        }
-      />
-
-      {/* Input pegado al teclado */}
+      {/* Mensajes + input */}
       <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.bottom : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
       >
-        <Animated.View
+      <Animated.View style={{ flex: 1, paddingBottom: Platform.OS === "android" ? keyboardOffset : 0 }}>
+        <FlatList
+          ref={flatListRef}
+          style={styles.messagesContainer}
+          data={messageList}
+          extraData={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          inverted
+          contentContainerStyle={[styles.messagesList, { paddingBottom: 8 }]}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled
+          nestedScrollEnabled
+          keyboardDismissMode="on-drag"
+          onScrollToIndexFailed={({ index, averageItemLength }) => {
+            flatListRef.current?.scrollToOffset({
+              offset: index * (averageItemLength || 72),
+              animated: true,
+            });
+          }}
+          ListFooterComponent={
+            <View style={styles.reminderBanner}>
+              <Text style={styles.reminderText}>
+                💡 {t('chatReminderMsg')} <Text style={styles.reminderBold}>{group.name}</Text>.
+              </Text>
+            </View>
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyChat}>
+              <Text style={[styles.emptyChatText, { color: theme.textSecondary }]}>
+                {t('chatEmpty')}
+              </Text>
+            </View>
+          }
+        />
+
+        {/* Typing bubble – fuera del FlatList para que los re-renders por tecla
+            no toquen la animación. React.memo + typingNames estable garantizan
+            que TypingBubble no se re-renderiza mientras se escribe.
+            paddingHorizontal: 16 alinea el bubble con los mensajes del chat. */}
+        {typingUserIds.length > 0 && (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
+            <TypingBubble names={typingNames} theme={theme} isDark={theme.dark} />
+          </View>
+        )}
+
+        {/* @mention suggestions */}
+        {(mentionQuery !== null && (mentionSuggestions.length > 0 || 'todos'.startsWith(mentionQuery.toLowerCase()))) && (
+          <View style={[styles.mentionList, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
+            {'todos'.startsWith(mentionQuery.toLowerCase()) && (
+              <TouchableOpacity
+                style={[styles.mentionItem, { borderBottomColor: theme.border }]}
+                onPress={() => handleSelectMention('todos')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.mentionAvatar, { backgroundColor: theme.dark ? '#1e1b4b' : '#EEF2FF' }]}>
+                  <Text style={styles.mentionAvatarText}>@</Text>
+                </View>
+                <Text style={[styles.mentionName, { color: theme.text }]}>todos</Text>
+                <Text style={[styles.mentionLeader, { backgroundColor: theme.dark ? '#1e1b4b' : '#EEF2FF', color: theme.dark ? '#A5B4FC' : '#4F46E5' }]}>notifica a todos</Text>
+              </TouchableOpacity>
+            )}
+            {mentionSuggestions.map((m) => (
+              <TouchableOpacity
+                key={m.id}
+                style={[styles.mentionItem, { borderBottomColor: theme.border }]}
+                onPress={() => handleSelectMention(m.name)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.mentionAvatar, { backgroundColor: theme.dark ? '#1e1b4b' : '#EEF2FF' }]}>
+                  <Text style={styles.mentionAvatarText}>{m.name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <Text style={[styles.mentionName, { color: theme.text }]}>{m.name}</Text>
+                {m.id === group?.leaderId && (
+                  <Text style={[styles.mentionLeader, { backgroundColor: theme.dark ? '#1e1b4b' : '#EEF2FF', color: theme.dark ? '#A5B4FC' : '#4F46E5' }]}>líder</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Reply preview bar */}
+        {replyingTo && (
+          <View style={[styles.replyBar, { backgroundColor: theme.card, borderTopColor: theme.border, borderLeftColor: '#6366F1' }]}>
+            <CornerUpLeft color="#6366F1" size={16} style={{ marginRight: 8, flexShrink: 0 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.replyBarAuthor, { color: '#6366F1' }]} numberOfLines={1}>
+                {replyingTo.authorId === user.uid ? 'Tú' : getMemberName(replyingTo.authorId)}
+              </Text>
+              <Text style={[styles.replyBarText, { color: theme.textSecondary }]} numberOfLines={1}>
+                {replyingTo.text}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={{ padding: 4 }}>
+              <X color={theme.textMuted} size={16} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Input bar */}
+        <View
           style={[
             styles.inputBar,
             {
               paddingBottom: Math.max(insets.bottom, 12),
-              marginBottom: Platform.OS === "android" ? keyboardAnim : 0,
               backgroundColor: theme.card,
               borderTopColor: theme.border,
             },
           ]}
         >
-          <TouchableOpacity
-            style={styles.attachButton}
-            onPress={() => setShowExtraMenu(true)}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Menú de opciones"
-            accessibilityHint="Doble toque para abrir encuestas y ruleta"
-          >
-            <MoreVertical color={theme.textMuted} size={22} />
-          </TouchableOpacity>
+          {isSubscriber ? (
+            <TouchableOpacity
+              style={styles.attachButton}
+              onPress={() => setShowExtraMenu(true)}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={t("chatToolsMenuA11y")}
+              accessibilityHint={t("chatToolsMenuHint")}
+            >
+              <Wrench color={theme.textMuted} size={20} />
+            </TouchableOpacity>
+          ) : null}
           <View style={[styles.inputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
             <TextInput
               ref={textInputRef}
+              value={inputText}
               style={[styles.textInput, { color: theme.text }]}
               onChangeText={(text) => {
                 inputValueRef.current = text;
+                setInputText(text);
                 setHasText(text.trim().length > 0);
+                // Detect @mention trigger: last word starting with @
+                const match = text.match(/@([^\s@]*)$/);
+                setMentionQuery(match ? match[1] : null);
+                if (user?.uid) {
+                  firestoreService.setTypingStatus(groupId, user.uid, text.trim().length > 0).catch(() => {});
+                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                  if (text.trim().length > 0) {
+                    typingTimeoutRef.current = setTimeout(() => {
+                      firestoreService.setTypingStatus(groupId, user.uid, false).catch(() => {});
+                    }, 4000);
+                  }
+                }
               }}
               placeholder={t('writeMessage')}
               placeholderTextColor={theme.textMuted}
@@ -693,7 +1170,8 @@ export default function ChatScreen({ route, navigation }) {
               </View>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
+      </Animated.View>
       </KeyboardAvoidingView>
 
       {/* Action sheet: editar / eliminar mensaje propio */}
@@ -710,7 +1188,7 @@ export default function ChatScreen({ route, navigation }) {
           activeOpacity={1}
           onPress={() => setActionMsg(null)}
         >
-          <View style={[styles.actionSheet, { backgroundColor: theme.card }]}>
+          <View style={[styles.actionSheet, { backgroundColor: theme.card, paddingBottom: Math.max(16, insets.bottom) }]}>
             <View style={[styles.actionHandle, { backgroundColor: theme.border }]} />
             <Text style={[styles.actionPreview, { color: theme.textMuted }]} numberOfLines={2}>
               {actionMsg?.text}
@@ -756,7 +1234,7 @@ export default function ChatScreen({ route, navigation }) {
             />
             <View style={styles.editActions}>
               <TouchableOpacity
-                style={[styles.editBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]}
+                style={[styles.editBtn, { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" }]}
                 onPress={() => setEditingMsg(null)}
                 disabled={editLoading}
               >
@@ -845,9 +1323,9 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
       {/* Menú extra (3 puntos) */}
-      <Modal visible={showExtraMenu} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowExtraMenu(false)} accessibilityViewIsModal={true}>
+      <Modal visible={showExtraMenu && isSubscriber} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowExtraMenu(false)} accessibilityViewIsModal={true}>
         <TouchableOpacity style={styles.actionOverlay} activeOpacity={1} onPress={() => setShowExtraMenu(false)}>
-          <View style={[styles.actionSheet, { backgroundColor: theme.card }]}>
+          <View style={[styles.actionSheet, { backgroundColor: theme.card, paddingBottom: Math.max(16, insets.bottom) }]}>
             <View style={[styles.actionHandle, { backgroundColor: theme.border }]} />
             <TouchableOpacity style={styles.actionRow} onPress={() => { setShowExtraMenu(false); setShowPollModal(true); }}>
               <BarChart2 color="#6366F1" size={22} />
@@ -867,7 +1345,7 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
       {/* Modal encuesta */}
-      <Modal visible={showPollModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowPollModal(false)} accessibilityViewIsModal={true}>
+      <Modal visible={showPollModal && isSubscriber} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowPollModal(false)} accessibilityViewIsModal={true}>
         <View style={styles.editOverlay}>
           <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "80%" }]}>
             <View style={styles.modalTitleRow}>
@@ -909,7 +1387,7 @@ export default function ChatScreen({ route, navigation }) {
               </TouchableOpacity>
             )}
             <View style={styles.editActions}>
-              <TouchableOpacity style={[styles.editBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]} onPress={() => setShowPollModal(false)}>
+              <TouchableOpacity style={[styles.editBtn, { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" }]} onPress={() => setShowPollModal(false)}>
                 <Text style={[styles.editBtnCancel, { color: theme.text }]}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -925,7 +1403,7 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
       {/* Modal ruleta */}
-      <Modal visible={showRouletteModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => { if (!rouletteSpinning) setShowRouletteModal(false); }} accessibilityViewIsModal={true}>
+      <Modal visible={showRouletteModal && isSubscriber} transparent animationType="slide" statusBarTranslucent onRequestClose={() => { if (!rouletteSpinning) setShowRouletteModal(false); }} accessibilityViewIsModal={true}>
         <View style={styles.editOverlay}>
           <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "90%" }]}>
             {/* Header */}
@@ -962,14 +1440,14 @@ export default function ChatScreen({ route, navigation }) {
                           style={[
                             styles.memberChip,
                             {
-                              backgroundColor: selected ? "#6366F1" : (isDark ? "#374151" : "#F3F4F6"),
+                              backgroundColor: selected ? "#6366F1" : (theme.dark ? "#374151" : "#F3F4F6"),
                               borderColor: selected ? "#6366F1" : theme.border,
                             },
                           ]}
                           onPress={() => !rouletteSpinning && toggleMemberInRoulette(m.name)}
                           disabled={rouletteSpinning}
                         >
-                          <View style={[styles.memberChipAvatar, { backgroundColor: selected ? "#4338CA" : (isDark ? "#4B5563" : "#E5E7EB") }]}>
+                          <View style={[styles.memberChipAvatar, { backgroundColor: selected ? "#4338CA" : (theme.dark ? "#4B5563" : "#E5E7EB") }]}>
                             <Text style={[styles.memberChipInitial, { color: selected ? "#E0E7FF" : theme.textMuted }]}>
                               {m.name?.[0]?.toUpperCase() || "?"}
                             </Text>
@@ -1015,16 +1493,16 @@ export default function ChatScreen({ route, navigation }) {
             </ScrollView>
 
             {rouletteResult && (
-              <View style={[styles.rouletteWinnerBanner, { backgroundColor: isDark ? "#312E81" : "#EDE9FE" }]}>
-                <Text style={[styles.rouletteWinnerBannerLabel, { color: isDark ? "#A5B4FC" : "#6D28D9" }]}>🏆 {t('winner')}</Text>
-                <Text style={[styles.rouletteWinnerBannerName, { color: isDark ? "#E0E7FF" : "#4C1D95" }]} numberOfLines={1}>{rouletteResult}</Text>
+              <View style={[styles.rouletteWinnerBanner, { backgroundColor: theme.dark ? "#312E81" : "#EDE9FE" }]}>
+                <Text style={[styles.rouletteWinnerBannerLabel, { color: theme.dark ? "#A5B4FC" : "#6D28D9" }]}>🏆 {t('winner')}</Text>
+                <Text style={[styles.rouletteWinnerBannerName, { color: theme.dark ? "#E0E7FF" : "#4C1D95" }]} numberOfLines={1}>{rouletteResult}</Text>
               </View>
             )}
 
             <View style={[styles.editActions, { marginTop: 8 }]}>
               {rouletteResult ? (
                 <>
-                  <TouchableOpacity style={[styles.editBtn, { backgroundColor: isDark ? "#374151" : "#F3F4F6" }]} onPress={() => { setRouletteResult(null); setRouletteCurrent(""); }}>
+                  <TouchableOpacity style={[styles.editBtn, { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" }]} onPress={() => { setRouletteResult(null); setRouletteCurrent(""); }}>
                     <Text style={[styles.editBtnCancel, { color: theme.text }]}>{t('spinAgain')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.editBtn, styles.editBtnSave]} onPress={handleSendRouletteResult}>
@@ -1091,6 +1569,12 @@ const styles = StyleSheet.create({
   messageWrapper: { maxWidth: "85%", marginBottom: 12 },
   messageWrapperMe: { alignSelf: "flex-end", alignItems: "flex-end" },
   messageWrapperOther: { alignSelf: "flex-start", alignItems: "flex-start" },
+  messageWrapperHighlighted: {
+    backgroundColor: 'rgba(251,191,36,0.2)',
+    borderRadius: 18,
+    paddingHorizontal: 6,
+    marginHorizontal: -6,
+  },
   authorName: {
     fontSize: 11,
     color: "#6B7280",
@@ -1132,7 +1616,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   messageTextMe: { color: "#FFFFFF" },
-  mention: { color: "#818CF8", fontWeight: "700" },
+  mention: { color: "#4F46E5", fontWeight: "700" },
   starButtonAbsolute: { position: "absolute", top: 8, right: 8, padding: 4 },
   messageTime: { fontSize: 10 },
   messageTimeMe: { color: "#C7D2FE" },
@@ -1310,6 +1794,71 @@ const styles = StyleSheet.create({
   },
   editedLabelMe: { color: "rgba(199,210,254,0.7)" },
   editedLabelOther: { color: "#9CA3AF" },
+  // @mention suggestions
+  mentionList: {
+    borderTopWidth: 1,
+    maxHeight: 180,
+    overflow: 'hidden',
+  },
+  mentionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  mentionAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mentionAvatarText: { fontSize: 13, fontWeight: '700', color: '#4F46E5' },
+  mentionName: { flex: 1, fontSize: 14, fontWeight: '600' },
+  mentionLeader: {
+    fontSize: 11,
+    color: '#4F46E5',
+    fontWeight: '700',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  // Reply quote inside bubble
+  replyQuote: {
+    borderLeftWidth: 3,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginBottom: 6,
+  },
+  replyQuoteAuthor: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  replyQuoteText: {
+    fontSize: 12,
+  },
+  // Reply bar above input
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderLeftWidth: 3,
+  },
+  replyBarAuthor: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 1,
+  },
+  replyBarText: {
+    fontSize: 12,
+  },
   // Action sheet
   actionOverlay: {
     flex: 1,

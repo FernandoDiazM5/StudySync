@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 import { View, Image } from 'react-native';
-import { UsersRound } from 'lucide-react-native';
+import { GraduationCap } from 'lucide-react-native';
 import Text from './AppText';
 
 // Genera un color consistente para cada grupo basado en su nombre
@@ -17,6 +17,23 @@ const colorFromName = (name = '') => {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 };
 
+function hexToRgb(hex) {
+  const h = String(hex).replace("#", "");
+  if (h.length !== 6) return { r: 79, g: 70, b: 229 };
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+/** Icono más oscuro que el acento: evita mismo tono que el fondo tenue (sombrero invisible). */
+function iconTintFromAccent(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  const k = 0.38;
+  return `rgb(${Math.max(32, Math.round(r * k))},${Math.max(32, Math.round(g * k))},${Math.max(32, Math.round(b * k))})`;
+}
+
 /**
  * GroupAvatar
  * Props:
@@ -26,6 +43,7 @@ const colorFromName = (name = '') => {
  *   borderRadius— radio de borde (default: circular)
  *   style       — estilos adicionales
  *   showInitials— muestra iniciales en lugar del ícono (default false)
+ *   onColoredHeader — cabecera oscura (p. ej. morado): más contraste en foto y en fallback
  */
 export default function GroupAvatar({
   photoURL,
@@ -34,12 +52,21 @@ export default function GroupAvatar({
   borderRadius,
   style,
   showInitials = false,
+  onColoredHeader = false,
 }) {
   const [imgError, setImgError] = useState(false);
   const radius = borderRadius !== undefined ? borderRadius : size / 2;
-  const iconSize = Math.round(size * 0.48);
+  // Birrete (GraduationCap) sobresale del bbox; tamaño moderado evita recorte con overflow:hidden del círculo.
+  const iconSize = Math.max(16, Math.round(size * 0.36));
   const accentColor = colorFromName(name);
-  const bgColor = accentColor + '22'; // 13% opacity
+  const { r, g, b } = hexToRgb(accentColor);
+  const bgColor = onColoredHeader
+    ? "rgba(255,255,255,0.34)"
+    : `rgba(${r},${g},${b},0.38)`;
+  const iconColor = onColoredHeader ? "#FFFFFF" : iconTintFromAccent(accentColor);
+  const headerRing = onColoredHeader
+    ? { borderWidth: 2.5, borderColor: "rgba(255,255,255,0.92)" }
+    : {};
 
   // Calcular iniciales (máximo 2 letras)
   const initials = name
@@ -59,6 +86,7 @@ export default function GroupAvatar({
       alignItems: 'center',
       overflow: 'hidden',
     },
+    onColoredHeader ? headerRing : null,
     style,
   ];
 
@@ -67,7 +95,11 @@ export default function GroupAvatar({
     return (
       <Image
         source={{ uri: photoURL }}
-        style={[{ width: size, height: size, borderRadius: radius }, style]}
+        style={[
+          { width: size, height: size, borderRadius: radius },
+          onColoredHeader ? headerRing : null,
+          style,
+        ]}
         onError={() => setImgError(true)}
       />
     );
@@ -81,13 +113,21 @@ export default function GroupAvatar({
           style={{
             fontSize: Math.round(size * 0.34),
             fontWeight: '800',
-            color: accentColor,
+            color: iconColor,
           }}
         >
           {initials}
         </Text>
       ) : (
-        <UsersRound size={iconSize} color={accentColor} />
+        // Contenedor explícito necesario para que react-native-svg
+        // mida su espacio al montarse dinámicamente en un FlatList.
+        <View style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>
+          <GraduationCap
+            size={iconSize}
+            color={iconColor}
+            strokeWidth={onColoredHeader ? 2.75 : 2.35}
+          />
+        </View>
       )}
     </View>
   );
