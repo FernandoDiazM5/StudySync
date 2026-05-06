@@ -42,3 +42,6 @@ yarn-error.*
 /android
 
 .claude/worktrees
+
+#eas configuration
+eas.json
