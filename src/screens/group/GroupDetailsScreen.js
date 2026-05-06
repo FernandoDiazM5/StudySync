@@ -59,6 +59,7 @@ import { listenGroup } from "../../services/firestoreService";
 import TaskItem from "../../components/TaskItem";
 import EmptyState from "../../components/EmptyState";
 import GroupAvatar from "../../components/GroupAvatar";
+import { initialsFromDisplayName } from "../../utils/avatarInitials";
 
 // ─── FileCard con efecto flash al llegar desde notificación ───────────────────
 // Los botones de acción se posicionan de forma ABSOLUTA en el lado derecho.
@@ -1095,6 +1096,10 @@ export default function GroupDetailsScreen({ route, navigation }) {
     !isLeader && (group?.moderators || []).includes(user?.uid);
   const canManage = isLeader || isModerator;
   const isFree = (userProfile?.plan || "free") === "free";
+  const getProfileName = useCallback(
+    (memberLike) => (memberLike?.name || "").trim(),
+    [],
+  );
   /** Tab y contenido "panel": solo el líder del grupo con plan Personal (no moderadores ni otros). */
   const canAccessLeaderPanel =
     Boolean(user?.uid && group?.leaderId === user.uid) &&
@@ -2075,12 +2080,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
                         />
                       ) : (
                         <Text style={styles.memberAvatarText}>
-                          {(member.name || "")
-                            .trim()
-                            .split(/\s+/)
-                            .slice(0, 2)
-                            .map((w) => w.charAt(0).toUpperCase())
-                            .join("")}
+                          {initialsFromDisplayName(
+                            getProfileName(member) || "",
+                          )}
                         </Text>
                       )}
                     </View>
@@ -2090,7 +2092,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                         numberOfLines={1}
                         ellipsizeMode="tail"
                       >
-                        {member.name}
+                        {getProfileName(member) || t("userFallback")}
                       </Text>
                       {isThisLeader ? (
                         <View style={styles.badgeLeader}>
@@ -2123,7 +2125,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                         onPress={() =>
                           handleToggleModerator(
                             member.id,
-                            member.name,
+                            getProfileName(member) || t("userFallback"),
                             isThisMod,
                           )
                         }
@@ -2146,8 +2148,12 @@ export default function GroupDetailsScreen({ route, navigation }) {
                         accessibilityRole="button"
                         accessibilityLabel={
                           isThisMod
-                            ? t("moderatorRemoveA11y", { name: member.name })
-                            : t("moderatorAssignA11y", { name: member.name })
+                            ? t("moderatorRemoveA11y", {
+                                name: getProfileName(member) || t("userFallback"),
+                              })
+                            : t("moderatorAssignA11y", {
+                                name: getProfileName(member) || t("userFallback"),
+                              })
                         }
                       >
                         {isThisMod ? (
@@ -2168,7 +2174,10 @@ export default function GroupDetailsScreen({ route, navigation }) {
                       {/* Expulsar */}
                       <TouchableOpacity
                         onPress={() =>
-                          handleRemoveMember(member.id, member.name)
+                          handleRemoveMember(
+                            member.id,
+                            getProfileName(member) || t("userFallback"),
+                          )
                         }
                         style={[
                           styles.memberActionBtn,
@@ -2178,7 +2187,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                           },
                         ]}
                         accessibilityRole="button"
-                        accessibilityLabel={`Expulsar a ${member.name}`}
+                        accessibilityLabel={`Expulsar a ${getProfileName(member) || t("userFallback")}`}
                         accessibilityHint="Doble toque para eliminar este miembro del grupo"
                       >
                         <UserMinus size={14} color="#EF4444" strokeWidth={2} />

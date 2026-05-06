@@ -47,6 +47,7 @@ import {
   getMyInvitations,
   acceptInvitation,
   declineInvitation,
+  sortGroupsForUser,
 } from "../../services/firestoreService";
 import * as firestoreService from "../../services/firestoreService";
 
@@ -276,12 +277,11 @@ export default function GroupsScreen({ navigation, route }) {
     };
   }, [user]);
 
-  // Ordenar por fecha de unión del usuario (más reciente primero)
-  const sortedGroups = [...groups].sort((a, b) => {
-    const ta = a.membersJoinedAt?.[user?.uid] || a.createdAt || '';
-    const tb = b.membersJoinedAt?.[user?.uid] || b.createdAt || '';
-    return tb.localeCompare(ta);
-  });
+  // Mismo criterio que getMyGroups (ms + desempate por id); useMemo evita reordenar en cada render.
+  const sortedGroups = useMemo(
+    () => sortGroupsForUser(groups, user?.uid),
+    [groups, user?.uid],
+  );
 
   // Helper: estado derivado de las tareas de un grupo
   const getGroupStatus = (groupId) => {

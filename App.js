@@ -6,6 +6,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AccessibilityProvider } from './src/contexts/AccessibilityContext';
@@ -21,18 +22,20 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AccessibilityProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <FileStorageProvider>
-              <NavigationContainer>
-                <AppStatusBar />
-                <AppNavigator />
-              </NavigationContainer>
-            </FileStorageProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </AccessibilityProvider>
+      <KeyboardProvider>
+        <AccessibilityProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <FileStorageProvider>
+                <NavigationContainer>
+                  <AppStatusBar />
+                  <AppNavigator />
+                </NavigationContainer>
+              </FileStorageProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </AccessibilityProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

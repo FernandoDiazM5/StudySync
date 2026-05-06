@@ -1,5 +1,6 @@
 // MESSAGES LIST SCREEN - StudySync
 import React, { useState, useEffect, useRef } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   TouchableOpacity,
@@ -29,12 +30,19 @@ export default function MessagesListScreen({ navigation }) {
   const [unreadCounts, setUnreadCounts] = useState({});
   const [typingGroups, setTypingGroups] = useState({});
   const [isReady, setIsReady] = useState(false);
+  const [avatarRenderTick, setAvatarRenderTick] = useState(0);
 
   // Refs: se actualizan sin provocar renders
   const groupsRef = useRef([]);
   const lastMsgsRef = useRef({});
   const msgsReadyRef = useRef(new Set());
   const initialDone = useRef(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setAvatarRenderTick((v) => v + 1);
+    }, []),
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -131,6 +139,8 @@ export default function MessagesListScreen({ navigation }) {
     const lastMsg = lastMessages[group.id];
     const isUnread = (unreadCounts[group.id] || 0) > 0;
     const isTyping = (typingGroups[group.id]?.length || 0) > 0;
+    // Al enviar mensaje cambia lastMessage: mismo grupo/perfil visual pero hay que remontar el avatar (SVG/Image reciclados).
+    const lastStamp = lastMsg?.id || lastMsg?.createdAt || "";
 
     return (
       <TouchableOpacity
@@ -150,6 +160,7 @@ export default function MessagesListScreen({ navigation }) {
         <View style={s.row}>
           <View style={s.leftSection}>
             <GroupAvatar
+              key={`gav-${avatarRenderTick}-${group.id}-${String(group.photoURL || "").trim()}-${lastStamp}`}
               photoURL={group.photoURL}
               name={group.name}
               size={44}
@@ -207,6 +218,8 @@ export default function MessagesListScreen({ navigation }) {
           data={sortedGroups}
           keyExtractor={(item) => item.id}
           renderItem={renderGroupChat}
+          extraData={{ lastMessages, typingGroups, unreadCounts }}
+          removeClippedSubviews={false}
           contentContainerStyle={[s.list, { flexGrow: 1, paddingBottom: insets.bottom + 16 }]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={

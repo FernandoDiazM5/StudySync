@@ -11,11 +11,11 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
   EmailAuthProvider,
-  reauthenticateWithCredential
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from './firebaseConfig';
-import { invalidateUserCache } from './firestoreService';
+  reauthenticateWithCredential,
+} from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { auth, db } from "./firebaseConfig";
+import { invalidateUserCache } from "./firestoreService";
 
 /**
  * Combina el documento Firestore `users` con Auth (displayName, email, photo)
@@ -23,25 +23,23 @@ import { invalidateUserCache } from './firestoreService';
  */
 export const mergeUserProfileFromAuth = (firebaseUser, firestoreData) => {
   const d =
-    firestoreData && typeof firestoreData === 'object' ? { ...firestoreData } : {};
-  const authEmail = firebaseUser?.email || '';
-  const authName =
-    (firebaseUser?.displayName && String(firebaseUser.displayName).trim()) || '';
-  const fromEmail =
-    authEmail && authEmail.includes('@')
-      ? authEmail.split('@')[0].trim()
-      : '';
+    firestoreData && typeof firestoreData === "object"
+      ? { ...firestoreData }
+      : {};
+  const authEmail = firebaseUser?.email || "";
   const firestoreName =
-    typeof d.name === 'string' && d.name.trim() ? d.name.trim() : '';
+    typeof d.name === "string" && d.name.trim() ? d.name.trim() : "";
   return {
     ...d,
     id: firebaseUser.uid,
-    email: (typeof d.email === 'string' && d.email.trim()) || authEmail,
-    name: firestoreName || authName || fromEmail || 'Usuario',
-    phone: d.phone ?? '',
-    role: d.role ?? 'Miembro',
-    plan: d.plan || 'free',
-    planBilling: d.planBilling || 'monthly',
+    email: (typeof d.email === "string" && d.email.trim()) || authEmail,
+    // Fuente de verdad del nombre completo: users/{uid}.name (registro/perfil).
+    // No caer a displayName de Auth para evitar alias/username derivados.
+    name: firestoreName || "",
+    phone: d.phone ?? "",
+    role: d.role ?? "Miembro",
+    plan: d.plan || "free",
+    planBilling: d.planBilling || "monthly",
     photoURL: d.photoURL || firebaseUser.photoURL || null,
   };
 };
@@ -49,16 +47,27 @@ export const mergeUserProfileFromAuth = (firebaseUser, firestoreData) => {
 async function ensureUserProfileDocument(uid, merged) {
   try {
     invalidateUserCache(uid);
+    // Solo incluir name/phone si traen valor. Con merge: true, enviar "" pisaría
+    // datos ya guardados (p. ej. carrera: registerUser escribe el perfil y luego
+    // este setDoc corre con merged vacío desde getUserProfile).
+    const name =
+      typeof merged.name === "string" && merged.name.trim()
+        ? merged.name.trim()
+        : "";
+    const phone =
+      merged.phone != null && String(merged.phone).trim()
+        ? String(merged.phone).trim()
+        : "";
     await setDoc(
-      doc(db, 'users', uid),
+      doc(db, "users", uid),
       {
         id: uid,
-        email: merged.email || '',
-        name: merged.name || '',
-        phone: merged.phone ?? '',
-        role: merged.role || 'Miembro',
-        plan: merged.plan || 'free',
-        planBilling: merged.planBilling || 'monthly',
+        email: merged.email || "",
+        ...(name ? { name } : {}),
+        ...(phone ? { phone } : {}),
+        role: merged.role || "Miembro",
+        plan: merged.plan || "free",
+        planBilling: merged.planBilling || "monthly",
         ...(merged.photoURL ? { photoURL: merged.photoURL } : {}),
         createdAt: merged.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -66,7 +75,7 @@ async function ensureUserProfileDocument(uid, merged) {
       { merge: true },
     );
   } catch (e) {
-    console.warn('[ensureUserProfileDocument]', e?.message);
+    console.warn("[ensureUserProfileDocument]", e?.message);
   }
 }
 
@@ -76,18 +85,22 @@ async function ensureUserProfileDocument(uid, merged) {
  */
 export const registerUser = async (email, password, name, phone) => {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
     const user = userCredential.user;
 
     // Guardar datos extra en Firestore
-    await setDoc(doc(db, 'users', user.uid), {
+    await setDoc(doc(db, "users", user.uid), {
       id: user.uid,
       name: name,
       email: email,
-      phone: phone || '',
-      role: 'Miembro',
-      fcmToken: '',
-      createdAt: new Date().toISOString()
+      phone: phone || "",
+      role: "Miembro",
+      fcmToken: "",
+      createdAt: new Date().toISOString(),
     });
 
     return { success: true, user };
@@ -101,7 +114,11 @@ export const registerUser = async (email, password, name, phone) => {
  */
 export const signIn = async (email, password) => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
     return { success: true, user: userCredential.user };
   } catch (error) {
     return { success: false, error: getErrorMessage(error.code) };
@@ -127,9 +144,12 @@ export const updatePassword = async (currentPassword, newPassword) => {
   try {
     const user = auth.currentUser;
     if (!user || !user.email) {
-      return { success: false, error: 'No hay sesión activa.' };
+      return { success: false, error: "No hay sesión activa." };
     }
-    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    const credential = EmailAuthProvider.credential(
+      user.email,
+      currentPassword,
+    );
     await reauthenticateWithCredential(user, credential);
     await firebaseUpdatePassword(user, newPassword);
     return { success: true };
@@ -157,7 +177,7 @@ export const sendPasswordReset = async (email) => {
  */
 export const getUserProfile = async (uid, authUser = null) => {
   try {
-    const docRef = doc(db, 'users', uid);
+    const docRef = doc(db, "users", uid);
     const docSnap = await getDoc(docRef);
     const exists = docSnap.exists();
     const raw = exists ? docSnap.data() : null;
@@ -171,7 +191,7 @@ export const getUserProfile = async (uid, authUser = null) => {
     }
 
     if (raw) return { success: true, data: raw };
-    return { success: false, error: 'Usuario no encontrado' };
+    return { success: false, error: "Usuario no encontrado" };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -189,13 +209,14 @@ export const onAuthChange = (callback) => {
  */
 const getErrorMessage = (code) => {
   const messages = {
-    'auth/email-already-in-use': 'Este correo ya está registrado.',
-    'auth/invalid-email': 'El correo electrónico no es válido.',
-    'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
-    'auth/user-not-found': 'No existe una cuenta con este correo.',
-    'auth/wrong-password': 'Contraseña incorrecta.',
-    'auth/too-many-requests': 'Demasiados intentos. Intenta más tarde.',
-    'auth/invalid-credential': 'Credenciales inválidas. Verifica tu correo y contraseña.',
+    "auth/email-already-in-use": "Este correo ya está registrado.",
+    "auth/invalid-email": "El correo electrónico no es válido.",
+    "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
+    "auth/user-not-found": "No existe una cuenta con este correo.",
+    "auth/wrong-password": "Contraseña incorrecta.",
+    "auth/too-many-requests": "Demasiados intentos. Intenta más tarde.",
+    "auth/invalid-credential":
+      "Credenciales inválidas. Verifica tu correo y contraseña.",
   };
-  return messages[code] || 'Ha ocurrido un error. Intenta de nuevo.';
+  return messages[code] || "Ha ocurrido un error. Intenta de nuevo.";
 };

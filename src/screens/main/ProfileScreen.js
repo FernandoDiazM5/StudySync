@@ -11,6 +11,8 @@ import {
   Image,
   ActivityIndicator,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
@@ -45,9 +47,18 @@ import { useFileStorage } from "../../contexts/FileStorageContext";
 import { signOut, updatePassword } from "../../services/authService";
 import {
   updateUserProfile,
+  getUsersByIds,
   syncLeaderPlanToGroups,
   syncLeaderNameToGroups,
 } from "../../services/firestoreService";
+
+// Formatea el número al estilo "XXX XXX XXX" (máx. 9 dígitos)
+const fmtPhone = (v) => {
+  const d = (v || "").replace(/\D/g, "").substring(0, 9);
+  if (d.length > 6) return `${d.substring(0, 3)} ${d.substring(3, 6)} ${d.substring(6)}`;
+  if (d.length > 3) return `${d.substring(0, 3)} ${d.substring(3)}`;
+  return d;
+};
 
 export default function ProfileScreen() {
   const { user, userProfile, refreshProfile } = useAuth();
@@ -57,6 +68,7 @@ export default function ProfileScreen() {
   const [subView, setSubView] = useState("main");
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [profileNameFromDb, setProfileNameFromDb] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
@@ -80,6 +92,22 @@ export default function ProfileScreen() {
       refreshProfile?.();
     }, [refreshProfile]),
   );
+
+  // Nombre fuente de verdad: users/{uid}.name (mismo campo que se guarda en registro)
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    getUsersByIds([user.uid])
+      .then((users) => {
+        if (cancelled) return;
+        const dbUser = users?.[0];
+        setProfileNameFromDb((dbUser?.name || "").trim());
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, userProfile?.name]);
 
   const displayRole = useMemo(() => {
     const r = (userProfile?.role || "").trim();
@@ -108,11 +136,13 @@ export default function ProfileScreen() {
 
   const { setIsMenuOpen } = useMenuOpen();
 
-  // Sincronizar estado local cuando cambia userProfile
+  // Sincronizar estado local cuando cambia userProfile,
+  // pero sin pisar lo que el usuario escribe en el formulario de edición.
   useEffect(() => {
+    if (subView === "editProfile") return;
     setEditName(userProfile?.name || "");
     setEditPhone(userProfile?.phone || "");
-  }, [userProfile]);
+  }, [userProfile, subView]);
 
   const handleLogout = async () => {
     Alert.alert(t("logout"), t("logoutConfirm"), [
@@ -130,15 +160,29 @@ export default function ProfileScreen() {
   };
 
   const handleProfileSubmit = async () => {
-    if (!editName.trim()) {
+    const trimmedName = editName.trim();
+    const phoneDigits = (editPhone || "").replace(/\D/g, "");
+
+    if (!trimmedName) {
       Alert.alert(t("error"), t("nameRequired"));
       return;
     }
+    if (trimmedName.split(/\s+/).length < 2) {
+      Alert.alert(t("error"), t("nameAndLastname"));
+      return;
+    }
+    if (trimmedName.length < 3) {
+      Alert.alert(t("error"), t("nameTooShort"));
+      return;
+    }
+    if (!phoneDigits || phoneDigits.length < 9) {
+      Alert.alert(t("error"), t("phoneInvalid"));
+      return;
+    }
     try {
-      const trimmedName = editName.trim();
       await updateUserProfile(user.uid, {
         name: trimmedName,
-        phone: editPhone.trim(),
+        phone: fmtPhone(editPhone),
       });
       // Propagar el nombre actualizado a los grupos donde este usuario es líder
       syncLeaderNameToGroups(user.uid, trimmedName).catch(() => {});
@@ -202,7 +246,10 @@ export default function ProfileScreen() {
   // === EDIT PROFILE SUB-VIEW ===
   if (subView === "editProfile") {
     return (
-      <View style={[s.container, { backgroundColor: theme.bg }]}>
+      <KeyboardAvoidingView
+        style={[s.container, { backgroundColor: theme.bg }]}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
         <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
           <AppButton
@@ -239,6 +286,10 @@ export default function ProfileScreen() {
                 ]}
                 value={editName}
                 onChangeText={setEditName}
+                editable={true}
+                selectTextOnFocus
+                autoCapitalize="words"
+                autoCorrect={false}
                 placeholderTextColor={theme.textMuted}
                 accessibilityLabel="Nombre completo"
                 accessibilityHint="Ingresa tu nombre completo"
@@ -258,8 +309,11 @@ export default function ProfileScreen() {
                   },
                 ]}
                 value={editPhone}
-                onChangeText={setEditPhone}
+                onChangeText={(v) => setEditPhone(fmtPhone(v))}
+                editable={true}
+                selectTextOnFocus
                 keyboardType="phone-pad"
+                maxLength={11}
                 placeholderTextColor={theme.textMuted}
                 accessibilityLabel="Número de celular"
                 accessibilityHint="Ingresa tu número de teléfono"
@@ -299,7 +353,7 @@ export default function ProfileScreen() {
             </AppButton>
           </View>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -531,7 +585,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           <Text style={[s.userName, { color: theme.text }]}>
-            {userProfile?.name || t("userFallback")}
+            {profileNameFromDb || userProfile?.name || t("userFallback")}
           </Text>
           <Text style={[s.userEmail, { color: theme.textSecondary }]}>
             {userProfile?.email || ""}

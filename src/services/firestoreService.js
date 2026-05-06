@@ -82,10 +82,9 @@ export const getUserByEmail = async (email) => {
 export const getUsersByIds = async (userIds) => {
   if (!userIds || userIds.length === 0) return [];
   const ordered = [...new Set(userIds.filter(Boolean))];
-  const missing = ordered.filter((id) => !_userCache.has(id));
   const chunks = [];
-  for (let i = 0; i < missing.length; i += 30) {
-    chunks.push(missing.slice(i, i + 30));
+  for (let i = 0; i < ordered.length; i += 30) {
+    chunks.push(ordered.slice(i, i + 30));
   }
 
   await Promise.all(
@@ -108,7 +107,14 @@ export const getUsersByIds = async (userIds) => {
     }),
   );
 
-  return ordered.map((id) => _userCache.get(id)).filter(Boolean);
+  return ordered
+    .map((id) => _userCache.get(id))
+    .filter(Boolean)
+    .map((u) => ({
+      ...u,
+      // `name` en Profile es la fuente de verdad para mostrar autor en chat.
+      name: (u?.name || '').trim(),
+    }));
 };
 
 /**
@@ -211,6 +217,54 @@ export const updateUserProfile = async (uid, data) => {
 // GROUPS
 // ==========================================
 
+/** Normaliza fechas Firestore / ISO / número a ms (0 si inválido). */
+const firestoreValueToMs = (v) => {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number' && !Number.isNaN(v)) return v > 1e12 ? v : v * 1000;
+  if (v instanceof Date) return v.getTime();
+  if (typeof v?.toDate === 'function') {
+    try {
+      return v.toDate().getTime();
+    } catch {
+      return 0;
+    }
+  }
+  if (typeof v?.seconds === 'number') {
+    return (
+      v.seconds * 1000 +
+      (typeof v.nanoseconds === 'number' ? v.nanoseconds / 1e6 : 0)
+    );
+  }
+  if (typeof v === 'string') {
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? 0 : t;
+  }
+  return 0;
+};
+
+/**
+ * Tiempo usado para ordenar la lista de grupos del usuario (unión al grupo o creación).
+ */
+export const groupSortTimeMs = (group, userId) => {
+  if (!group || !userId) return 0;
+  const joinedMs = firestoreValueToMs(group.membersJoinedAt?.[userId]);
+  if (joinedMs > 0) return joinedMs;
+  return firestoreValueToMs(group.createdAt);
+};
+
+/**
+ * Orden estable: más reciente primero; mismo tiempo → por id (evita saltos al reconectar / caché).
+ */
+export const sortGroupsForUser = (groups, userId) => {
+  if (!userId || !groups?.length) return groups ? [...groups] : [];
+  return [...groups].sort((a, b) => {
+    const tb = groupSortTimeMs(b, userId);
+    const ta = groupSortTimeMs(a, userId);
+    if (tb !== ta) return tb - ta;
+    return String(a.id).localeCompare(String(b.id));
+  });
+};
+
 /**
  * Obtener grupos del usuario actual (donde es miembro)
  * CASCADA: usuario → grupos donde members array-contains user.uid
@@ -231,7 +285,7 @@ export const getMyGroups = (userId, callback) => {
         id: doc.id,
         ...doc.data()
       }));
-      callback(groups);
+      callback(sortGroupsForUser(groups, userId));
     },
     logFirestoreError('getMyGroups')
   );
@@ -291,8 +345,10 @@ export const createGroup = async (groupData) => {
  */
 export const addMemberToGroup = async (groupId, userId) => {
   const docRef = doc(db, 'groups', groupId);
+  const now = new Date().toISOString();
   await updateDoc(docRef, {
-    members: arrayUnion(userId)
+    members: arrayUnion(userId),
+    [`membersJoinedAt.${userId}`]: now,
   });
 };
 

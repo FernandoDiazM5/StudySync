@@ -4,7 +4,7 @@
 // con color generado por el nombre del grupo
 // ============================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Image } from 'react-native';
 import { GraduationCap } from 'lucide-react-native';
 import Text from './AppText';
@@ -55,9 +55,21 @@ export default function GroupAvatar({
   onColoredHeader = false,
 }) {
   const [imgError, setImgError] = useState(false);
+
+  const photoUri = useMemo(() => {
+    if (photoURL == null) return "";
+    const s = String(photoURL).trim();
+    return s || "";
+  }, [photoURL]);
+
+  // Reciclaje de FlatList + updates de lastMessage: resetear al cambiar identidad de imagen o nombre.
+  useEffect(() => {
+    setImgError(false);
+  }, [photoUri, name]);
+
   const radius = borderRadius !== undefined ? borderRadius : size / 2;
-  // Birrete (GraduationCap) sobresale del bbox; tamaño moderado evita recorte con overflow:hidden del círculo.
-  const iconSize = Math.max(16, Math.round(size * 0.36));
+  // Birrete sobresale del bbox; ~43% del lado del avatar (antes 36%), sin pasarse del overflow:hidden.
+  const iconSize = Math.max(18, Math.round(size * 0.43));
   const accentColor = colorFromName(name);
   const { r, g, b } = hexToRgb(accentColor);
   const bgColor = onColoredHeader
@@ -68,7 +80,7 @@ export default function GroupAvatar({
     ? { borderWidth: 2.5, borderColor: "rgba(255,255,255,0.92)" }
     : {};
 
-  // Calcular iniciales (máximo 2 letras)
+  // Iniciales para grupos: hasta 2 letras de las dos primeras palabras (no confundir con personas).
   const initials = name
     .trim()
     .split(/\s+/)
@@ -90,11 +102,12 @@ export default function GroupAvatar({
     style,
   ];
 
-  // Foto disponible y sin error
-  if (photoURL && !imgError) {
+  // Foto disponible y sin error (URL vacía / espacios → fallback birrete)
+  if (photoUri && !imgError) {
     return (
       <Image
-        source={{ uri: photoURL }}
+        key={photoUri}
+        source={{ uri: photoUri }}
         style={[
           { width: size, height: size, borderRadius: radius },
           onColoredHeader ? headerRing : null,
@@ -121,11 +134,15 @@ export default function GroupAvatar({
       ) : (
         // Contenedor explícito necesario para que react-native-svg
         // mida su espacio al montarse dinámicamente en un FlatList.
-        <View style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>
+        <View
+          style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}
+          collapsable={false}
+        >
           <GraduationCap
+            key={`${name}-${iconSize}-${iconColor}`}
             size={iconSize}
             color={iconColor}
-            strokeWidth={onColoredHeader ? 2.75 : 2.35}
+            strokeWidth={onColoredHeader ? 2.85 : 2.45}
           />
         </View>
       )}

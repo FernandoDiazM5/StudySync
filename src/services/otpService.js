@@ -20,7 +20,7 @@
 
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { BREVO_API_KEY, BREVO_SENDER_EMAIL, BREVO_SENDER_NAME } from '../config/brevo';
+import { getBrevoCredentials } from '../config/brevo';
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutos
 const MAX_ATTEMPTS  = 3;
@@ -31,11 +31,10 @@ const generateOtp = () =>
   String(Math.floor(100000 + Math.random() * 900000));
 
 // ── Detectar si Brevo está configurado ───────────────────────
-const isBrevoConfigured = () =>
-  !!(BREVO_API_KEY &&
-     BREVO_SENDER_EMAIL &&
-     BREVO_API_KEY    !== 'PEGA_TU_API_KEY_AQUI' &&
-     BREVO_SENDER_EMAIL !== 'PEGA_TU_CORREO_AQUI');
+const isBrevoConfigured = () => {
+  const { apiKey, email } = getBrevoCredentials();
+  return !!(apiKey && email);
+};
 
 // ── HTML del email ───────────────────────────────────────────
 const buildEmailHtml = (otp, userName) => `
@@ -141,17 +140,19 @@ export const sendOtp = async (email, userName = '') => {
     }
 
     // ── Llamar a Brevo API ────────────────────────────────────
+    const { apiKey, email: brevoSenderEmail, name: brevoSenderName } =
+      getBrevoCredentials();
     const res = await fetch(BREVO_URL, {
       method : 'POST',
       headers: {
         'Accept'      : 'application/json',
         'Content-Type': 'application/json',
-        'api-key'     : BREVO_API_KEY,
+        'api-key'     : apiKey,
       },
       body: JSON.stringify({
         sender: {
-          name : BREVO_SENDER_NAME,
-          email: BREVO_SENDER_EMAIL,
+          name : brevoSenderName,
+          email: brevoSenderEmail,
         },
         to     : [{ email, name }],
         subject: 'Tu código de verificación - StudySync',

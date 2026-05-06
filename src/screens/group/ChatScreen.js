@@ -3,7 +3,13 @@
 // Input fijo al teclado + chat ocupa toda la pantalla
 // ============================================
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   Animated,
   Easing,
@@ -14,19 +20,30 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   StatusBar,
-  Keyboard,
   Modal,
   Alert,
   Vibration,
 } from "react-native";
 import Text from "../../components/AppText";
 import GroupAvatar from "../../components/GroupAvatar";
+import { initialsFromDisplayName } from "../../utils/avatarInitials";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, Send, Star, UsersRound, Wrench, Pencil, Trash2, BarChart2, Shuffle, Plus, X, CornerUpLeft } from "lucide-react-native";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  ChevronLeft,
+  Send,
+  Star,
+  UsersRound,
+  Wrench,
+  Pencil,
+  Trash2,
+  BarChart2,
+  Shuffle,
+  Plus,
+  X,
+  CornerUpLeft,
+} from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
@@ -38,19 +55,24 @@ import {
 } from "../../utils/dateUtils";
 import { Audio } from "expo-av";
 import { notifyNewMessage } from "../../services/notificationService";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 // ── Typing bubble con 3 dots animados ────────────────────────
 // React.memo evita que se re-renderice (y se reinicie la animación)
 // cuando el padre re-renderiza por cambios de estado no relacionados (ej. hasText).
-const TypingBubble = React.memo(function TypingBubble({ names, theme, isDark }) {
+const TypingBubble = React.memo(function TypingBubble({
+  names,
+  theme,
+  isDark,
+}) {
   const dot0 = useRef(new Animated.Value(0)).current;
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const BOUNCE  = 260;   // ms para subir o bajar
-    const STAGGER = 140;   // ms entre cada dot
-    const PAUSE   = STAGGER * 2; // pausa al final para que el ciclo sea simétrico
+    const BOUNCE = 260; // ms para subir o bajar
+    const STAGGER = 140; // ms entre cada dot
+    const PAUSE = STAGGER * 2; // pausa al final para que el ciclo sea simétrico
 
     // Cada dot corre su propio loop con un delay de arranque diferente.
     // Duración total del loop: startDelay + BOUNCE + BOUNCE + (PAUSE - startDelay)
@@ -72,7 +94,7 @@ const TypingBubble = React.memo(function TypingBubble({ names, theme, isDark }) 
             useNativeDriver: true,
           }),
           Animated.delay(PAUSE - startDelay),
-        ])
+        ]),
       );
 
     const a0 = makeLoop(dot0, 0);
@@ -81,27 +103,42 @@ const TypingBubble = React.memo(function TypingBubble({ names, theme, isDark }) 
     a0.start();
     a1.start();
     a2.start();
-    return () => { a0.stop(); a1.stop(); a2.stop(); };
+    return () => {
+      a0.stop();
+      a1.stop();
+      a2.stop();
+    };
   }, []);
 
-  const label = names.length === 1
-    ? `${names[0]} está escribiendo`
-    : `${names.join(', ')} están escribiendo`;
+  const label =
+    names.length === 1
+      ? `${names[0]} está escribiendo`
+      : `${names.join(", ")} están escribiendo`;
 
   return (
     <View style={typingStyles.wrapper}>
-      <Text style={[typingStyles.name, { color: theme.textSecondary }]}>{label}</Text>
-      <View style={[typingStyles.bubble, {
-        backgroundColor: theme.card,
-        borderColor: theme.border,
-      }]}>
+      <Text style={[typingStyles.name, { color: theme.textSecondary }]}>
+        {label}
+      </Text>
+      <View
+        style={[
+          typingStyles.bubble,
+          {
+            backgroundColor: theme.card,
+            borderColor: theme.border,
+          },
+        ]}
+      >
         {[dot0, dot1, dot2].map((dot, i) => (
           <Animated.View
             key={i}
-            style={[typingStyles.dot, {
-              backgroundColor: isDark ? '#6B7280' : '#9CA3AF',
-              transform: [{ translateY: dot }],
-            }]}
+            style={[
+              typingStyles.dot,
+              {
+                backgroundColor: isDark ? "#6B7280" : "#9CA3AF",
+                transform: [{ translateY: dot }],
+              },
+            ]}
           />
         ))}
       </View>
@@ -110,18 +147,18 @@ const TypingBubble = React.memo(function TypingBubble({ names, theme, isDark }) 
 });
 
 const typingStyles = StyleSheet.create({
-  wrapper: { alignSelf: 'flex-start', marginBottom: 8, marginTop: 4 },
-  name: { fontSize: 11, fontWeight: '600', marginBottom: 4, marginLeft: 4 },
+  wrapper: { alignSelf: "flex-start", marginBottom: 8, marginTop: 4 },
+  name: { fontSize: 11, fontWeight: "600", marginBottom: 4, marginLeft: 4 },
   bubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 18,
     borderTopLeftRadius: 4,
     borderWidth: 1,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     elevation: 1,
   },
   dot: {
@@ -137,8 +174,7 @@ function SwipeableMessage({ onSwipeRight, children }) {
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) =>
-        g.dx > 8 && Math.abs(g.dy) < 25,
+      onMoveShouldSetPanResponder: (_, g) => g.dx > 8 && Math.abs(g.dy) < 25,
       onPanResponderMove: (_, g) => {
         if (g.dx > 0) translateX.setValue(Math.min(g.dx * 0.6, 72));
       },
@@ -155,9 +191,12 @@ function SwipeableMessage({ onSwipeRight, children }) {
         }).start();
       },
       onPanResponderTerminate: () => {
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
       },
-    })
+    }),
   ).current;
 
   return (
@@ -167,6 +206,25 @@ function SwipeableMessage({ onSwipeRight, children }) {
     >
       {children}
     </Animated.View>
+  );
+}
+
+/**
+ * `KeyboardAvoidingView` de keyboard-controller: `paddingBottom` animado según el teclado
+ * nativo (misma fuente que el resto del módulo). Encoge el layout del FlatList + composer
+ * sin `transform`, así los mensajes no quedan debajo del input en ningún dispositivo.
+ * `softwareKeyboardLayoutMode: "resize"`: si el sistema ya encoge la ventana, el cálculo
+ * de solapamiento tiende a 0 y no duplica el ajuste.
+ */
+function ChatBodyShell({ headerHeight, children }) {
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, minHeight: 0 }}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
+    >
+      {children}
+    </KeyboardAvoidingView>
   );
 }
 
@@ -182,6 +240,7 @@ export default function ChatScreen({ route, navigation }) {
   const { theme, isDark } = useTheme();
   const { t } = useAccessibility();
   const insets = useSafeAreaInsets();
+  const inputBottomPadding = 12;
   const isSubscriber = (userProfile?.plan || "free") === "personal";
 
   // Placeholder inmediato si la navegación trae nombre/foto (evita pantalla en blanco hasta getGroup).
@@ -200,7 +259,8 @@ export default function ChatScreen({ route, navigation }) {
   const [onlineMembers, setOnlineMembers] = useState([]);
   const [showOnline, setShowOnline] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
-  const keyboardOffset = useRef(new Animated.Value(0)).current;
+  /** Ancla scroll inicial en lista invertida. */
+  const initialChatScrollDoneRef = useRef(false);
   const [hasText, setHasText] = useState(false);
   const [actionMsg, setActionMsg] = useState(null);
   const [editingMsg, setEditingMsg] = useState(null);
@@ -227,10 +287,48 @@ export default function ChatScreen({ route, navigation }) {
   const processedHighlightRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const typingSoundRef = useRef(null);
-  const [inputText, setInputText] = useState("");   // valor controlado del TextInput
-  const inputValueRef = useRef("");                  // copia ref para handleSend (sin stale closure)
+  const [inputText, setInputText] = useState(""); // valor controlado del TextInput
+  const [resolvedMe, setResolvedMe] = useState(null);
+  const inputValueRef = useRef(""); // copia ref para handleSend (sin stale closure)
   const textInputRef = useRef(null);
   const flatListRef = useRef(null);
+
+  const getProfileName = useCallback((profileLike) => {
+    return (profileLike?.name || "").trim();
+  }, []);
+
+  const getCurrentUserName = useCallback(() => {
+    return (
+      getProfileName(userProfile) ||
+      getProfileName(resolvedMe) ||
+      getProfileName(members.find((m) => m.id === user?.uid)) ||
+      "Usuario"
+    );
+  }, [
+    getProfileName,
+    members,
+    resolvedMe,
+    user?.uid,
+    userProfile,
+  ]);
+
+  useEffect(() => {
+    initialChatScrollDoneRef.current = false;
+  }, [groupId]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    firestoreService
+      .getUser(user.uid)
+      .then((profile) => {
+        if (!cancelled) setResolvedMe(profile || null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   // Cargar grupo y mensajes
   useEffect(() => {
@@ -248,25 +346,20 @@ export default function ChatScreen({ route, navigation }) {
           unsubOnline = firestoreService.getOnlineMembers(
             groupId,
             groupData.members,
-            (online) => { if (!cancelled) setOnlineMembers(online); }
+            (online) => {
+              if (!cancelled) setOnlineMembers(online);
+            },
           );
 
           // Lanzar el fetch de red inmediatamente (no bloqueante aún)
-          const membersFetchPromise = firestoreService.getUsersByIds(groupData.members);
-
-          // Mientras tanto leer caché de AsyncStorage para mostrar nombres al instante
-          try {
-            const cached = await AsyncStorage.getItem(`@members_${groupId}`);
-            if (cached && !cancelled) {
-              setMembers(JSON.parse(cached));
-            }
-          } catch {}
+          const membersFetchPromise = firestoreService.getUsersByIds(
+            groupData.members,
+          );
 
           // Esperar la respuesta fresca y actualizar estado + caché
           const memberData = await membersFetchPromise;
           if (cancelled) return;
           setMembers(memberData);
-          AsyncStorage.setItem(`@members_${groupId}`, JSON.stringify(memberData)).catch(() => {});
         }
       } catch (e) {
         console.error("Error cargando grupo:", e);
@@ -284,9 +377,13 @@ export default function ChatScreen({ route, navigation }) {
       },
     );
 
-    const unsubTyping = firestoreService.onTypingStatus(groupId, user?.uid, (ids) => {
-      if (!cancelled) setTypingUserIds(ids);
-    });
+    const unsubTyping = firestoreService.onTypingStatus(
+      groupId,
+      user?.uid,
+      (ids) => {
+        if (!cancelled) setTypingUserIds(ids);
+      },
+    );
 
     if (user?.uid) {
       firestoreService
@@ -301,17 +398,25 @@ export default function ChatScreen({ route, navigation }) {
       unsubTyping();
       if (rouletteTimerRef.current) clearTimeout(rouletteTimerRef.current);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      if (user?.uid) firestoreService.setTypingStatus(groupId, user.uid, false).catch(() => {});
+      if (user?.uid)
+        firestoreService
+          .setTypingStatus(groupId, user.uid, false)
+          .catch(() => {});
     };
   }, [groupId, user]);
 
   // Preload typing sound
   useEffect(() => {
     let sound;
-    Audio.Sound.createAsync(require('../../../assets/sounds/typing.wav'))
-      .then(({ sound: s }) => { sound = s; typingSoundRef.current = s; })
+    Audio.Sound.createAsync(require("../../../assets/sounds/typing.wav"))
+      .then(({ sound: s }) => {
+        sound = s;
+        typingSoundRef.current = s;
+      })
       .catch(() => {});
-    return () => { sound?.unloadAsync().catch(() => {}); };
+    return () => {
+      sound?.unloadAsync().catch(() => {});
+    };
   }, []);
 
   useEffect(() => {
@@ -321,6 +426,35 @@ export default function ChatScreen({ route, navigation }) {
       setShowRouletteModal(false);
     }
   }, [isSubscriber]);
+
+  // Asegura nombres de autores históricos que no estén en group.members
+  useEffect(() => {
+    if (!messages.length) return;
+    const knownIds = new Set(members.map((m) => m.id));
+    const missingAuthorIds = [
+      ...new Set(
+        messages.map((m) => m.authorId).filter((id) => id && !knownIds.has(id)),
+      ),
+    ];
+    if (!missingAuthorIds.length) return;
+
+    let cancelled = false;
+    firestoreService
+      .getUsersByIds(missingAuthorIds)
+      .then((fetched) => {
+        if (cancelled || !fetched?.length) return;
+        setMembers((prev) => {
+          const byId = new Map(prev.map((m) => [m.id, m]));
+          fetched.forEach((m) => byId.set(m.id, m));
+          return Array.from(byId.values());
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, members]);
 
   // Scroll + highlight message cuando se llega desde una notificación de mención.
   // IMPORTANTE: usamos `messages.length` en las deps (no `messageList.length`) porque
@@ -336,7 +470,11 @@ export default function ChatScreen({ route, navigation }) {
     if (idx >= 0) {
       setHighlightedMsgId(highlightMessageId);
       setTimeout(() => {
-        flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+        flatListRef.current?.scrollToIndex({
+          index: idx,
+          animated: true,
+          viewPosition: 0.5,
+        });
       }, 350);
       // Quitar el resaltado después de 3 segundos
       setTimeout(() => setHighlightedMsgId(null), 3500);
@@ -354,19 +492,6 @@ export default function ChatScreen({ route, navigation }) {
     prevTypingLenRef.current = typingUserIds.length;
   }, [typingUserIds]);
 
-  // Keyboard: Android usa Animated offset, iOS usa KAV
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      const show = Keyboard.addListener("keyboardDidShow", (e) => {
-        keyboardOffset.setValue(e.endCoordinates.height);
-      });
-      const hide = Keyboard.addListener("keyboardDidHide", () => {
-        keyboardOffset.setValue(0);
-      });
-      return () => { show.remove(); hide.remove(); };
-    }
-  }, []);
-
   const handleSend = async () => {
     const textToSend = inputValueRef.current.trim();
     if (!textToSend) return;
@@ -375,14 +500,17 @@ export default function ChatScreen({ route, navigation }) {
     const now = new Date();
     const msgCreatedAt = now.toISOString();
     const msgTime = formatTimeInTimeZone(msgCreatedAt);
-    const myName = members.find((m) => m.id === user.uid)?.name || user?.displayName || '';
+    const myName = getCurrentUserName();
 
     setInputText("");
     inputValueRef.current = "";
     setHasText(false);
     setReplyingTo(null);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    if (user?.uid) firestoreService.setTypingStatus(groupId, user.uid, false).catch(() => {});
+    if (user?.uid)
+      firestoreService
+        .setTypingStatus(groupId, user.uid, false)
+        .catch(() => {});
 
     // Scroll al mensaje enviado
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -396,7 +524,14 @@ export default function ChatScreen({ route, navigation }) {
       time: msgTime,
       createdAt: msgCreatedAt,
       important: false,
-      ...(currentReply && { replyTo: { id: currentReply.id, text: currentReply.text, authorId: currentReply.authorId, authorName: currentReply.authorName } }),
+      ...(currentReply && {
+        replyTo: {
+          id: currentReply.id,
+          text: currentReply.text,
+          authorId: currentReply.authorId,
+          authorName: currentReply.authorName,
+        },
+      }),
     };
     setMessages((prev) => [...prev, optimisticMsg]);
     textInputRef.current?.focus();
@@ -409,14 +544,21 @@ export default function ChatScreen({ route, navigation }) {
         text: textToSend,
         time: msgTime,
         important: false,
-        ...(currentReply && { replyTo: { id: currentReply.id, text: currentReply.text, authorId: currentReply.authorId, authorName: currentReply.authorName } }),
+        ...(currentReply && {
+          replyTo: {
+            id: currentReply.id,
+            text: currentReply.text,
+            authorId: currentReply.authorId,
+            authorName: currentReply.authorName,
+          },
+        }),
       });
 
       // ── Notificaciones de mención (@nombre o @todos) ────────────
       const tokens = textToSend.match(/@\w+/g) || [];
       if (tokens.length > 0) {
-        const senderName = members.find((m) => m.id === user.uid)?.name || 'Alguien';
-        const mentionAll = tokens.some((t) => t.toLowerCase() === '@todos');
+        const senderName = getCurrentUserName() || "Alguien";
+        const mentionAll = tokens.some((t) => t.toLowerCase() === "@todos");
         let targetIds = [];
 
         if (mentionAll) {
@@ -428,8 +570,8 @@ export default function ChatScreen({ route, navigation }) {
           // Null-safety en m.name para evitar TypeError si algún perfil no tiene nombre.
           tokens.forEach((token) => {
             const q = token.slice(1).toLowerCase();
-            const member = members.find(
-              (m) => (m.name || m.displayName || '').toLowerCase().startsWith(q)
+            const member = members.find((m) =>
+              (m.name || m.displayName || "").toLowerCase().startsWith(q),
             );
             if (member && member.id !== user.uid) targetIds.push(member.id);
           });
@@ -437,31 +579,36 @@ export default function ChatScreen({ route, navigation }) {
         }
 
         if (targetIds.length > 0) {
-          const preview = textToSend.length > 60 ? `${textToSend.slice(0, 60)}…` : textToSend;
+          const preview =
+            textToSend.length > 60 ? `${textToSend.slice(0, 60)}…` : textToSend;
           const notifBody = mentionAll
             ? `${senderName} mencionó a todos los integrantes: "${preview}"`
             : `${senderName} te mencionó: "${preview}"`;
           targetIds.forEach((uid) => {
-            firestoreService.createNotification(uid, {
-              type: 'mention',
-              title: group?.name || 'Grupo',
-              body: notifBody,
-              bodyKey: mentionAll ? 'notifMentionAllBody' : 'notifMentionUserBody',
-              notifParams: { sender: senderName, preview },
-              data: { groupId, messageId: msgId },
-            }).catch((err) => console.warn('[mention-notif]', err?.message));
+            firestoreService
+              .createNotification(uid, {
+                type: "mention",
+                title: group?.name || "Grupo",
+                body: notifBody,
+                bodyKey: mentionAll
+                  ? "notifMentionAllBody"
+                  : "notifMentionUserBody",
+                notifParams: { sender: senderName, preview },
+                data: { groupId, messageId: msgId },
+              })
+              .catch((err) => console.warn("[mention-notif]", err?.message));
           });
         }
       }
 
       // Notificar a los demás miembros (fire-and-forget)
-      const senderName = members.find((m) => m.id === user.uid)?.name || 'Alguien';
+      const senderName = getCurrentUserName() || "Alguien";
       notifyNewMessage({
         groupId,
         senderId: user.uid,
         senderName,
         messageText: textToSend,
-        groupName: group?.name || 'Chat',
+        groupName: group?.name || "Chat",
       }).catch(() => {});
     } catch (e) {
       console.error("Error enviando mensaje:", e);
@@ -486,12 +633,16 @@ export default function ChatScreen({ route, navigation }) {
     setMentionQuery(null);
   };
 
-  const mentionSuggestions = mentionQuery !== null
-    ? members.filter((m) =>
-        m.id !== user?.uid &&
-        (m.name || m.displayName || '').toLowerCase().startsWith(mentionQuery.toLowerCase())
-      )
-    : [];
+  const mentionSuggestions =
+    mentionQuery !== null
+      ? members.filter(
+          (m) =>
+            m.id !== user?.uid &&
+            (m.name || m.displayName || "")
+              .toLowerCase()
+              .startsWith(mentionQuery.toLowerCase()),
+        )
+      : [];
 
   const handleLongPress = (msg) => {
     if (msg.authorId !== user.uid) return; // solo mensajes propios
@@ -523,24 +674,20 @@ export default function ChatScreen({ route, navigation }) {
   const handleDelete = () => {
     const msg = actionMsg;
     setActionMsg(null);
-    Alert.alert(
-      t('deleteMessage'),
-      t('deleteMessageConfirm'),
-      [
-        { text: t('cancel'), style: "cancel" },
-        {
-          text: t('delete'),
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await firestoreService.deleteMessage(msg.id);
-            } catch (e) {
-              console.error("Error eliminando mensaje:", e);
-            }
-          },
+    Alert.alert(t("deleteMessage"), t("deleteMessageConfirm"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("delete"),
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await firestoreService.deleteMessage(msg.id);
+          } catch (e) {
+            console.error("Error eliminando mensaje:", e);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   // ── Poll ─────────────────────────────────────────────────────
@@ -549,8 +696,10 @@ export default function ChatScreen({ route, navigation }) {
     const validOptions = pollOptions.filter((o) => o.trim());
     if (!pollQuestion.trim() || validOptions.length < 2) return;
     const votes = {};
-    validOptions.forEach((_, i) => { votes[String(i)] = []; });
-    const myName = members.find((m) => m.id === user.uid)?.name || user?.displayName || '';
+    validOptions.forEach((_, i) => {
+      votes[String(i)] = [];
+    });
+    const myName = getCurrentUserName();
     await firestoreService.sendMessage({
       groupId,
       authorId: user.uid,
@@ -590,7 +739,9 @@ export default function ChatScreen({ route, navigation }) {
       pollVoteFoundRef.current = false;
 
       setMessages((prev) => {
-        const idx = prev.findIndex((m) => m.id === messageId && m.type === "poll");
+        const idx = prev.findIndex(
+          (m) => m.id === messageId && m.type === "poll",
+        );
         if (idx < 0) return prev;
         pollVoteFoundRef.current = true;
         const old = prev[idx];
@@ -653,7 +804,11 @@ export default function ChatScreen({ route, navigation }) {
     const already = rouletteItems.findIndex((i) => i === memberName);
     if (already >= 0) {
       const updated = rouletteItems.filter((i) => i !== memberName);
-      setRouletteItems(updated.length >= 2 ? updated : [...updated, ...Array(2 - updated.length).fill("")]);
+      setRouletteItems(
+        updated.length >= 2
+          ? updated
+          : [...updated, ...Array(2 - updated.length).fill("")],
+      );
     } else {
       const emptyIdx = rouletteItems.findIndex((i) => !i.trim());
       if (emptyIdx >= 0) {
@@ -669,7 +824,7 @@ export default function ChatScreen({ route, navigation }) {
   const handleSendRouletteResult = async () => {
     if (!isSubscriber || !rouletteResult) return;
     const validItems = rouletteItems.filter((i) => i.trim());
-    const myName = members.find((m) => m.id === user.uid)?.name || user?.displayName || '';
+    const myName = getCurrentUserName();
     await firestoreService.sendMessage({
       groupId,
       authorId: user.uid,
@@ -690,8 +845,28 @@ export default function ChatScreen({ route, navigation }) {
   };
 
   const getMemberName = (authorId, fallbackName) => {
-    const member = members.find((m) => m.id === authorId);
-    return member?.name || fallbackName || "Usuario";
+    const normalizedAuthorId = authorId ? String(authorId) : "";
+    const member =
+      members.find((m) => String(m.id) === normalizedAuthorId) ||
+      members.find((m) => m?.email === normalizedAuthorId) ||
+      members.find(
+        (m) =>
+          typeof m?.email === "string" &&
+          m.email.toLowerCase() === normalizedAuthorId.toLowerCase(),
+      );
+
+    const memberName = getProfileName(member);
+    if (memberName) return memberName;
+
+    if (authorId === user?.uid) {
+      const currentName = getCurrentUserName();
+      if (currentName && currentName !== "Usuario") return currentName;
+    }
+
+    const fallback = (fallbackName || "").trim();
+    if (fallback) return fallback;
+
+    return "Usuario";
   };
 
   const isLeaderMember = (authorId) => group?.leaderId === authorId;
@@ -718,48 +893,142 @@ export default function ChatScreen({ route, navigation }) {
   // Memoize so FlatList doesn't re-render all messages when typingUserIds changes
   const messageList = useMemo(() => buildMessageList(messages), [messages]);
 
+  const onlineMemberById = useMemo(() => {
+    const map = new Map();
+    onlineMembers.forEach((m) => {
+      if (m?.id) map.set(m.id, m);
+    });
+    return map;
+  }, [onlineMembers]);
+
+  useEffect(() => {
+    if (!typingUserIds.length) return;
+    const knownIds = new Set(members.map((m) => m.id));
+    const missing = typingUserIds.filter((id) => id && !knownIds.has(id));
+    if (!missing.length) return;
+    let cancelled = false;
+    firestoreService
+      .getUsersByIds(missing)
+      .then((fetched) => {
+        if (cancelled || !fetched?.length) return;
+        setMembers((prev) => {
+          const byId = new Map(prev.map((m) => [m.id, m]));
+          fetched.forEach((m) => byId.set(m.id, m));
+          return Array.from(byId.values());
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [typingUserIds, members]);
+
+  const getTypingName = useCallback(
+    (uid) => {
+      const fromMembers = members.find((m) => m.id === uid);
+      const memberName = getProfileName(fromMembers);
+      if (memberName) return memberName;
+
+      const fromOnline = onlineMemberById.get(uid);
+      const onlineName = getProfileName(fromOnline);
+      if (onlineName) return onlineName;
+
+      return "Usuario";
+    },
+    [members, getProfileName, onlineMemberById],
+  );
+
   // Estabilizar el array de nombres para que React.memo en TypingBubble
   // no vea un prop nuevo en cada re-render por tecla escrita.
   const typingNames = useMemo(
-    () => typingUserIds.map((id) => getMemberName(id)),
-    [typingUserIds, members],
+    () => typingUserIds.map((id) => getTypingName(id)),
+    [typingUserIds, getTypingName],
   );
 
   const renderPollMessage = (msg) => {
-    const totalVotes = Object.values(msg.votes || {}).reduce((s, arr) => s + arr.length, 0);
+    const totalVotes = Object.values(msg.votes || {}).reduce(
+      (s, arr) => s + arr.length,
+      0,
+    );
     const myVote = Object.keys(msg.votes || {}).find((k) =>
-      (msg.votes[k] || []).includes(user.uid)
+      (msg.votes[k] || []).includes(user.uid),
     );
     return (
       <View style={styles.specialMsgWrapper}>
-        <View style={[styles.pollBubble, { backgroundColor: theme.card, borderColor: "#6366F1" }]}>
+        <View
+          style={[
+            styles.pollBubble,
+            { backgroundColor: theme.card, borderColor: "#6366F1" },
+          ]}
+        >
           <View style={styles.pollHeader}>
             <BarChart2 color="#6366F1" size={14} />
-            <Text style={[styles.pollLabel, { color: "#6366F1" }]}>ENCUESTA</Text>
+            <Text style={[styles.pollLabel, { color: "#6366F1" }]}>
+              ENCUESTA
+            </Text>
           </View>
-          <Text style={[styles.pollQuestion, { color: theme.text }]}>{msg.question}</Text>
+          <Text style={[styles.pollQuestion, { color: theme.text }]}>
+            {msg.question}
+          </Text>
           {(msg.options || []).map((opt, i) => {
             const count = (msg.votes?.[String(i)] || []).length;
-            const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+            const pct =
+              totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
             const voted = myVote === String(i);
             return (
               <TouchableOpacity
                 key={i}
-                style={[styles.pollOption, { borderColor: voted ? "#6366F1" : theme.border, backgroundColor: theme.input }]}
+                style={[
+                  styles.pollOption,
+                  {
+                    borderColor: voted ? "#6366F1" : theme.border,
+                    backgroundColor: theme.input,
+                  },
+                ]}
                 onPress={() => handleVotePoll(msg.id, i)}
                 activeOpacity={0.7}
               >
                 <View style={styles.pollOptionTop}>
-                  <Text style={[styles.pollOptionText, { color: voted ? "#6366F1" : theme.text }]} numberOfLines={1}>{opt}</Text>
-                  <Text style={[styles.pollPct, { color: voted ? "#6366F1" : theme.textMuted }]}>{pct}%</Text>
+                  <Text
+                    style={[
+                      styles.pollOptionText,
+                      { color: voted ? "#6366F1" : theme.text },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {opt}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.pollPct,
+                      { color: voted ? "#6366F1" : theme.textMuted },
+                    ]}
+                  >
+                    {pct}%
+                  </Text>
                 </View>
-                <View style={[styles.pollBarTrack, { backgroundColor: theme.dark ? "#374151" : "#E5E7EB" }]}>
-                  <View style={[styles.pollBarFill, { width: `${pct}%`, backgroundColor: voted ? "#6366F1" : "#A5B4FC" }]} />
+                <View
+                  style={[
+                    styles.pollBarTrack,
+                    { backgroundColor: theme.dark ? "#374151" : "#E5E7EB" },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.pollBarFill,
+                      {
+                        width: `${pct}%`,
+                        backgroundColor: voted ? "#6366F1" : "#A5B4FC",
+                      },
+                    ]}
+                  />
                 </View>
               </TouchableOpacity>
             );
           })}
-          <Text style={[styles.pollTotal, { color: theme.textMuted }]}>{totalVotes} {totalVotes === 1 ? "voto" : "votos"}</Text>
+          <Text style={[styles.pollTotal, { color: theme.textMuted }]}>
+            {totalVotes} {totalVotes === 1 ? "voto" : "votos"}
+          </Text>
         </View>
       </View>
     );
@@ -767,17 +1036,31 @@ export default function ChatScreen({ route, navigation }) {
 
   const renderRouletteMessage = (msg) => (
     <View style={styles.rouletteMsgWrapper}>
-      <View style={[styles.rouletteBubble, { backgroundColor: theme.dark ? "#1E1B4B" : "#EEF2FF", borderColor: "#6366F1" }]}>
+      <View
+        style={[
+          styles.rouletteBubble,
+          {
+            backgroundColor: theme.dark ? "#1E1B4B" : "#EEF2FF",
+            borderColor: "#6366F1",
+          },
+        ]}
+      >
         {/* Header */}
         <View style={styles.rouletteHeaderRow}>
           <Text style={styles.rouletteEmoji}>🎡</Text>
           <View style={{ flex: 1 }}>
             {msg.rouletteTitle ? (
-              <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>{msg.rouletteTitle}</Text>
+              <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>
+                {msg.rouletteTitle}
+              </Text>
             ) : (
-              <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>{t('rouletteTitle')}</Text>
+              <Text style={[styles.rouletteMsgTitle, { color: "#4F46E5" }]}>
+                {t("rouletteTitle")}
+              </Text>
             )}
-            <Text style={[styles.rouletteMsgSub, { color: theme.textSecondary }]}>
+            <Text
+              style={[styles.rouletteMsgSub, { color: theme.textSecondary }]}
+            >
               Lanzado por {getMemberName(msg.authorId, msg.authorName)}
             </Text>
           </View>
@@ -785,7 +1068,12 @@ export default function ChatScreen({ route, navigation }) {
 
         {/* Lista de participantes */}
         {(msg.rouletteItems || []).length > 0 && (
-          <View style={[styles.rouletteList, { borderColor: theme.dark ? "#312E81" : "#C7D2FE" }]}>
+          <View
+            style={[
+              styles.rouletteList,
+              { borderColor: theme.dark ? "#312E81" : "#C7D2FE" },
+            ]}
+          >
             {(msg.rouletteItems || []).map((item, i) => {
               const isWinner = item === msg.rouletteWinner;
               return (
@@ -793,10 +1081,17 @@ export default function ChatScreen({ route, navigation }) {
                   key={i}
                   style={[
                     styles.rouletteListItem,
-                    isWinner && { backgroundColor: theme.dark ? "#312E81" : "#E0E7FF" },
+                    isWinner && {
+                      backgroundColor: theme.dark ? "#312E81" : "#E0E7FF",
+                    },
                   ]}
                 >
-                  <Text style={[styles.rouletteListNum, { color: isWinner ? "#4F46E5" : theme.textMuted }]}>
+                  <Text
+                    style={[
+                      styles.rouletteListNum,
+                      { color: isWinner ? "#4F46E5" : theme.textMuted },
+                    ]}
+                  >
                     {i + 1}.
                   </Text>
                   <Text
@@ -816,9 +1111,26 @@ export default function ChatScreen({ route, navigation }) {
         )}
 
         {/* Ganador destacado */}
-        <View style={[styles.rouletteWinnerBox, { backgroundColor: theme.dark ? "#312E81" : "#DDD6FE" }]}>
-          <Text style={[styles.rouletteWinnerLabel, { color: theme.dark ? "#A5B4FC" : "#4338CA" }]}>¡Le tocó!</Text>
-          <Text style={[styles.rouletteWinner, { color: theme.dark ? "#E0E7FF" : "#3730A3" }]}>
+        <View
+          style={[
+            styles.rouletteWinnerBox,
+            { backgroundColor: theme.dark ? "#312E81" : "#DDD6FE" },
+          ]}
+        >
+          <Text
+            style={[
+              styles.rouletteWinnerLabel,
+              { color: theme.dark ? "#A5B4FC" : "#4338CA" },
+            ]}
+          >
+            ¡Le tocó!
+          </Text>
+          <Text
+            style={[
+              styles.rouletteWinner,
+              { color: theme.dark ? "#E0E7FF" : "#3730A3" },
+            ]}
+          >
             {msg.rouletteWinner}
           </Text>
         </View>
@@ -834,11 +1146,30 @@ export default function ChatScreen({ route, navigation }) {
     if (item.type === "separator") {
       return (
         <View style={styles.dateSeparator}>
-          <View style={[styles.dateSeparatorLine, { backgroundColor: theme.dark ? "#374151" : "#D1D5DB" }]} />
-          <View style={[styles.dateSeparatorChip, { backgroundColor: theme.dark ? "#374151" : "#E5E7EB" }]}>
-            <Text style={[styles.dateSeparatorText, { color: theme.textSecondary }]}>{item.label}</Text>
+          <View
+            style={[
+              styles.dateSeparatorLine,
+              { backgroundColor: theme.dark ? "#374151" : "#D1D5DB" },
+            ]}
+          />
+          <View
+            style={[
+              styles.dateSeparatorChip,
+              { backgroundColor: theme.dark ? "#374151" : "#E5E7EB" },
+            ]}
+          >
+            <Text
+              style={[styles.dateSeparatorText, { color: theme.textSecondary }]}
+            >
+              {item.label}
+            </Text>
           </View>
-          <View style={[styles.dateSeparatorLine, { backgroundColor: theme.dark ? "#374151" : "#D1D5DB" }]} />
+          <View
+            style={[
+              styles.dateSeparatorLine,
+              { backgroundColor: theme.dark ? "#374151" : "#D1D5DB" },
+            ]}
+          />
         </View>
       );
     }
@@ -854,7 +1185,9 @@ export default function ChatScreen({ route, navigation }) {
     const isHighlighted = msg.id === highlightedMsgId;
 
     const replyAuthorName = msg.replyTo
-      ? (msg.replyTo.authorId === user.uid ? 'Tú' : getMemberName(msg.replyTo.authorId, msg.replyTo.authorName))
+      ? msg.replyTo.authorId === user.uid
+        ? "Tú"
+        : getMemberName(msg.replyTo.authorId, msg.replyTo.authorName)
       : null;
 
     return (
@@ -868,7 +1201,7 @@ export default function ChatScreen({ route, navigation }) {
         >
           {!isMe && (
             <Text style={[styles.authorName, { color: theme.textSecondary }]}>
-              {authorName} {isLeader ? `(${t('leader')})` : ""}
+              {authorName} {isLeader ? `(${t("leader")})` : ""}
             </Text>
           )}
           <TouchableOpacity
@@ -877,27 +1210,80 @@ export default function ChatScreen({ route, navigation }) {
             delayLongPress={350}
           >
             <View
-              style={[styles.bubble, isMe ? styles.bubbleMe : [styles.bubbleOther, { backgroundColor: theme.card, borderColor: theme.border }]]}
+              style={[
+                styles.bubble,
+                isMe
+                  ? styles.bubbleMe
+                  : [
+                      styles.bubbleOther,
+                      {
+                        backgroundColor: theme.card,
+                        borderColor: theme.border,
+                      },
+                    ],
+              ]}
             >
               {/* Reply quote */}
               {msg.replyTo && (
-                <View style={[styles.replyQuote, {
-                  borderLeftColor: isMe ? 'rgba(255,255,255,0.5)' : '#6366F1',
-                  backgroundColor: isMe ? 'rgba(0,0,0,0.18)' : (theme.dark ? '#1F2937' : '#EEF2FF'),
-                }]}>
-                  <Text style={[styles.replyQuoteAuthor, { color: isMe ? 'rgba(255,255,255,0.85)' : '#6366F1' }]} numberOfLines={1}>
+                <View
+                  style={[
+                    styles.replyQuote,
+                    {
+                      borderLeftColor: isMe
+                        ? "rgba(255,255,255,0.5)"
+                        : "#6366F1",
+                      backgroundColor: isMe
+                        ? "rgba(0,0,0,0.18)"
+                        : theme.dark
+                          ? "#1F2937"
+                          : "#EEF2FF",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.replyQuoteAuthor,
+                      { color: isMe ? "rgba(255,255,255,0.85)" : "#6366F1" },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {replyAuthorName}
                   </Text>
-                  <Text style={[styles.replyQuoteText, { color: isMe ? 'rgba(255,255,255,0.65)' : theme.textSecondary }]} numberOfLines={2}>
+                  <Text
+                    style={[
+                      styles.replyQuoteText,
+                      {
+                        color: isMe
+                          ? "rgba(255,255,255,0.65)"
+                          : theme.textSecondary,
+                      },
+                    ]}
+                    numberOfLines={2}
+                  >
                     {msg.replyTo.text}
                   </Text>
                 </View>
               )}
               <View style={styles.messageTextContainer}>
-                <Text style={[styles.messageText, isMe ? styles.messageTextMe : { color: theme.text }]}>
+                <Text
+                  style={[
+                    styles.messageText,
+                    isMe ? styles.messageTextMe : { color: theme.text },
+                  ]}
+                >
                   {msg.text.split(/(@\w+)/g).map((part, index) =>
                     part.startsWith("@") ? (
-                      <Text key={index} style={[styles.mention, { color: isMe ? 'rgba(255,255,255,0.95)' : '#4F46E5' }]}>{part}</Text>
+                      <Text
+                        key={index}
+                        style={[
+                          styles.mention,
+                          {
+                            color: isMe ? "rgba(255,255,255,0.95)" : "#4F46E5",
+                          },
+                        ]}
+                      >
+                        {part}
+                      </Text>
                     ) : (
                       <Text key={index}>{part}</Text>
                     ),
@@ -922,7 +1308,12 @@ export default function ChatScreen({ route, navigation }) {
               </TouchableOpacity>
               <View style={styles.messageFooter}>
                 {msg.edited && (
-                  <Text style={[styles.editedLabel, isMe ? styles.editedLabelMe : styles.editedLabelOther]}>
+                  <Text
+                    style={[
+                      styles.editedLabel,
+                      isMe ? styles.editedLabelMe : styles.editedLabelOther,
+                    ]}
+                  >
                     editado
                   </Text>
                 )}
@@ -932,7 +1323,9 @@ export default function ChatScreen({ route, navigation }) {
                     isMe ? styles.messageTimeMe : styles.messageTimeOther,
                   ]}
                 >
-                  {msg.createdAt ? formatTimeInTimeZone(msg.createdAt) : msg.time || ""}
+                  {msg.createdAt
+                    ? formatTimeInTimeZone(msg.createdAt)
+                    : msg.time || ""}
                 </Text>
               </View>
             </View>
@@ -945,7 +1338,9 @@ export default function ChatScreen({ route, navigation }) {
   if (!group) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.bg }]}>
-        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>{t('loading')}</Text>
+        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+          {t("loading")}
+        </Text>
       </View>
     );
   }
@@ -955,14 +1350,17 @@ export default function ChatScreen({ route, navigation }) {
       <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.headerBg }]} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+      <View
+        style={[styles.header, { backgroundColor: theme.headerBg }]}
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+      >
         <View style={styles.headerLeft}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel={t('back') || 'Volver'}
+            accessibilityLabel={t("back") || "Volver"}
             accessibilityHint="Doble toque para regresar"
           >
             <ChevronLeft color="#FFFFFF" size={24} />
@@ -979,7 +1377,7 @@ export default function ChatScreen({ route, navigation }) {
             <Text style={styles.headerTitle} numberOfLines={1}>
               {group.name}
             </Text>
-            <Text style={styles.headerSubtitle}>{t('onlyAcademicTopics')}</Text>
+            <Text style={styles.headerSubtitle}>{t("onlyAcademicTopics")}</Text>
           </View>
         </View>
         <TouchableOpacity
@@ -987,192 +1385,316 @@ export default function ChatScreen({ route, navigation }) {
           style={{ marginLeft: 10 }}
           accessible={true}
           accessibilityRole="button"
-          accessibilityLabel={`${t('groupMembers')}, ${onlineMembers.length} ${t('online')}`}
+          accessibilityLabel={`${t("groupMembers")}, ${onlineMembers.length} ${t("online")}`}
           accessibilityHint="Doble toque para ver miembros conectados"
         >
           <UsersRound color="#C7D2FE" size={20} />
-          {onlineMembers.length > 0 && (
-            <View style={styles.onlineDot} />
-          )}
+          {onlineMembers.length > 0 && <View style={styles.onlineDot} />}
         </TouchableOpacity>
       </View>
 
-      {/* Mensajes + input */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
-      >
-      <Animated.View style={{ flex: 1, paddingBottom: Platform.OS === "android" ? keyboardOffset : 0 }}>
-        <FlatList
-          ref={flatListRef}
-          style={styles.messagesContainer}
-          data={messageList}
-          extraData={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          inverted
-          contentContainerStyle={[styles.messagesList, { paddingBottom: 8 }]}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled
-          nestedScrollEnabled
-          keyboardDismissMode="on-drag"
-          onScrollToIndexFailed={({ index, averageItemLength }) => {
-            flatListRef.current?.scrollToOffset({
-              offset: index * (averageItemLength || 72),
-              animated: true,
-            });
-          }}
-          ListFooterComponent={
-            <View style={styles.reminderBanner}>
-              <Text style={styles.reminderText}>
-                💡 {t('chatReminderMsg')} <Text style={styles.reminderBold}>{group.name}</Text>.
-              </Text>
-            </View>
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyChat}>
-              <Text style={[styles.emptyChatText, { color: theme.textSecondary }]}>
-                {t('chatEmpty')}
-              </Text>
-            </View>
-          }
-        />
+      <ChatBodyShell headerHeight={headerHeight}>
+        <View style={{ flex: 1, minHeight: 0 }}>
+          <FlatList
+            ref={flatListRef}
+            style={styles.messagesContainer}
+            data={messageList}
+            extraData={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            inverted
+            contentContainerStyle={[styles.messagesList, { paddingBottom: 8 }]}
+            showsVerticalScrollIndicator={false}
+            scrollEnabled
+            nestedScrollEnabled
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => {
+              if (!messageList.length || initialChatScrollDoneRef.current)
+                return;
+              if (highlightMessageId) {
+                initialChatScrollDoneRef.current = true;
+                return;
+              }
+              initialChatScrollDoneRef.current = true;
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: false,
+                  });
+                });
+              });
+            }}
+            onScrollToIndexFailed={({ index, averageItemLength }) => {
+              flatListRef.current?.scrollToOffset({
+                offset: index * (averageItemLength || 72),
+                animated: true,
+              });
+            }}
+            ListFooterComponent={
+              <View style={styles.reminderBanner}>
+                <Text style={styles.reminderText}>
+                  💡 {t("chatReminderMsg")}{" "}
+                  <Text style={styles.reminderBold}>{group.name}</Text>.
+                </Text>
+              </View>
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyChat}>
+                <Text
+                  style={[styles.emptyChatText, { color: theme.textSecondary }]}
+                >
+                  {t("chatEmpty")}
+                </Text>
+              </View>
+            }
+          />
 
-        {/* Typing bubble – fuera del FlatList para que los re-renders por tecla
+          <View style={{ flexShrink: 0, backgroundColor: theme.bg }}>
+            {/* Typing bubble – fuera del FlatList para que los re-renders por tecla
             no toquen la animación. React.memo + typingNames estable garantizan
             que TypingBubble no se re-renderiza mientras se escribe.
             paddingHorizontal: 16 alinea el bubble con los mensajes del chat. */}
-        {typingUserIds.length > 0 && (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
-            <TypingBubble names={typingNames} theme={theme} isDark={theme.dark} />
-          </View>
-        )}
-
-        {/* @mention suggestions */}
-        {(mentionQuery !== null && (mentionSuggestions.length > 0 || 'todos'.startsWith(mentionQuery.toLowerCase()))) && (
-          <View style={[styles.mentionList, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
-            {'todos'.startsWith(mentionQuery.toLowerCase()) && (
-              <TouchableOpacity
-                style={[styles.mentionItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleSelectMention('todos')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.mentionAvatar, { backgroundColor: theme.dark ? '#1e1b4b' : '#EEF2FF' }]}>
-                  <Text style={styles.mentionAvatarText}>@</Text>
-                </View>
-                <Text style={[styles.mentionName, { color: theme.text }]}>todos</Text>
-                <Text style={[styles.mentionLeader, { backgroundColor: theme.dark ? '#1e1b4b' : '#EEF2FF', color: theme.dark ? '#A5B4FC' : '#4F46E5' }]}>notifica a todos</Text>
-              </TouchableOpacity>
-            )}
-            {mentionSuggestions.map((m) => (
-              <TouchableOpacity
-                key={m.id}
-                style={[styles.mentionItem, { borderBottomColor: theme.border }]}
-                onPress={() => handleSelectMention(m.name)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.mentionAvatar, { backgroundColor: theme.dark ? '#1e1b4b' : '#EEF2FF' }]}>
-                  <Text style={styles.mentionAvatarText}>{m.name.charAt(0).toUpperCase()}</Text>
-                </View>
-                <Text style={[styles.mentionName, { color: theme.text }]}>{m.name}</Text>
-                {m.id === group?.leaderId && (
-                  <Text style={[styles.mentionLeader, { backgroundColor: theme.dark ? '#1e1b4b' : '#EEF2FF', color: theme.dark ? '#A5B4FC' : '#4F46E5' }]}>líder</Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Reply preview bar */}
-        {replyingTo && (
-          <View style={[styles.replyBar, { backgroundColor: theme.card, borderTopColor: theme.border, borderLeftColor: '#6366F1' }]}>
-            <CornerUpLeft color="#6366F1" size={16} style={{ marginRight: 8, flexShrink: 0 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.replyBarAuthor, { color: '#6366F1' }]} numberOfLines={1}>
-                {replyingTo.authorId === user.uid ? 'Tú' : getMemberName(replyingTo.authorId)}
-              </Text>
-              <Text style={[styles.replyBarText, { color: theme.textSecondary }]} numberOfLines={1}>
-                {replyingTo.text}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setReplyingTo(null)} style={{ padding: 4 }}>
-              <X color={theme.textMuted} size={16} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Input bar */}
-        <View
-          style={[
-            styles.inputBar,
-            {
-              paddingBottom: Math.max(insets.bottom, 12),
-              backgroundColor: theme.card,
-              borderTopColor: theme.border,
-            },
-          ]}
-        >
-          {isSubscriber ? (
-            <TouchableOpacity
-              style={styles.attachButton}
-              onPress={() => setShowExtraMenu(true)}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel={t("chatToolsMenuA11y")}
-              accessibilityHint={t("chatToolsMenuHint")}
-            >
-              <Wrench color={theme.textMuted} size={20} />
-            </TouchableOpacity>
-          ) : null}
-          <View style={[styles.inputWrapper, { backgroundColor: theme.input, borderColor: theme.border }]}>
-            <TextInput
-              ref={textInputRef}
-              value={inputText}
-              style={[styles.textInput, { color: theme.text }]}
-              onChangeText={(text) => {
-                inputValueRef.current = text;
-                setInputText(text);
-                setHasText(text.trim().length > 0);
-                // Detect @mention trigger: last word starting with @
-                const match = text.match(/@([^\s@]*)$/);
-                setMentionQuery(match ? match[1] : null);
-                if (user?.uid) {
-                  firestoreService.setTypingStatus(groupId, user.uid, text.trim().length > 0).catch(() => {});
-                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                  if (text.trim().length > 0) {
-                    typingTimeoutRef.current = setTimeout(() => {
-                      firestoreService.setTypingStatus(groupId, user.uid, false).catch(() => {});
-                    }, 4000);
-                  }
-                }
-              }}
-              placeholder={t('writeMessage')}
-              placeholderTextColor={theme.textMuted}
-              blurOnSubmit={false}
-              multiline
-              maxLength={500}
-              textAlignVertical="top"
-              scrollEnabled={false}
-              underlineColorAndroid="transparent"
-              autoCorrect={false}
-            />
-            <TouchableOpacity
-              onPress={handleSend}
-              style={styles.sendButton}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel={t('send') || 'Enviar mensaje'}
-              accessibilityHint="Doble toque para enviar el mensaje"
-            >
-              <View style={styles.sendIconContainer}>
-                <Send color={hasText ? "#4F46E5" : "#9CA3AF"} size={20} />
+            {typingUserIds.length > 0 && (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
+                <TypingBubble
+                  names={typingNames}
+                  theme={theme}
+                  isDark={theme.dark}
+                />
               </View>
-            </TouchableOpacity>
+            )}
+
+            {/* @mention suggestions */}
+            {mentionQuery !== null &&
+              (mentionSuggestions.length > 0 ||
+                "todos".startsWith(mentionQuery.toLowerCase())) && (
+                <View
+                  style={[
+                    styles.mentionList,
+                    {
+                      backgroundColor: theme.card,
+                      borderTopColor: theme.border,
+                    },
+                  ]}
+                >
+                  {"todos".startsWith(mentionQuery.toLowerCase()) && (
+                    <TouchableOpacity
+                      style={[
+                        styles.mentionItem,
+                        { borderBottomColor: theme.border },
+                      ]}
+                      onPress={() => handleSelectMention("todos")}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.mentionAvatar,
+                          {
+                            backgroundColor: theme.dark ? "#1e1b4b" : "#EEF2FF",
+                          },
+                        ]}
+                      >
+                        <Text style={styles.mentionAvatarText}>@</Text>
+                      </View>
+                      <Text style={[styles.mentionName, { color: theme.text }]}>
+                        todos
+                      </Text>
+                      <Text
+                        style={[
+                          styles.mentionLeader,
+                          {
+                            backgroundColor: theme.dark ? "#1e1b4b" : "#EEF2FF",
+                            color: theme.dark ? "#A5B4FC" : "#4F46E5",
+                          },
+                        ]}
+                      >
+                        notifica a todos
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {mentionSuggestions.map((m) => (
+                    <TouchableOpacity
+                      key={m.id}
+                      style={[
+                        styles.mentionItem,
+                        { borderBottomColor: theme.border },
+                      ]}
+                      onPress={() =>
+                        handleSelectMention(getProfileName(m) || "Usuario")
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.mentionAvatar,
+                          {
+                            backgroundColor: theme.dark ? "#1e1b4b" : "#EEF2FF",
+                          },
+                        ]}
+                      >
+                        <Text style={styles.mentionAvatarText}>
+                          {initialsFromDisplayName(
+                            getProfileName(m) || "U",
+                          ) || "U"}
+                        </Text>
+                      </View>
+                      <Text style={[styles.mentionName, { color: theme.text }]}>
+                        {getProfileName(m) || "Usuario"}
+                      </Text>
+                      {m.id === group?.leaderId && (
+                        <Text
+                          style={[
+                            styles.mentionLeader,
+                            {
+                              backgroundColor: theme.dark
+                                ? "#1e1b4b"
+                                : "#EEF2FF",
+                              color: theme.dark ? "#A5B4FC" : "#4F46E5",
+                            },
+                          ]}
+                        >
+                          líder
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+            {/* Reply preview bar */}
+            {replyingTo && (
+              <View
+                style={[
+                  styles.replyBar,
+                  {
+                    backgroundColor: theme.card,
+                    borderTopColor: theme.border,
+                    borderLeftColor: "#6366F1",
+                  },
+                ]}
+              >
+                <CornerUpLeft
+                  color="#6366F1"
+                  size={16}
+                  style={{ marginRight: 8, flexShrink: 0 }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[styles.replyBarAuthor, { color: "#6366F1" }]}
+                    numberOfLines={1}
+                  >
+                    {replyingTo.authorId === user.uid
+                      ? "Tú"
+                      : getMemberName(replyingTo.authorId)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.replyBarText,
+                      { color: theme.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {replyingTo.text}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setReplyingTo(null)}
+                  style={{ padding: 4 }}
+                >
+                  <X color={theme.textMuted} size={16} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Input bar */}
+            <View
+              style={[
+                styles.inputBar,
+                {
+                  marginBottom: 0,
+                  paddingBottom: Math.max(insets.bottom, inputBottomPadding),
+                  backgroundColor: theme.card,
+                  borderTopColor: theme.border,
+                },
+              ]}
+            >
+              {isSubscriber ? (
+                <TouchableOpacity
+                  style={styles.attachButton}
+                  onPress={() => setShowExtraMenu(true)}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("chatToolsMenuA11y")}
+                  accessibilityHint={t("chatToolsMenuHint")}
+                >
+                  <Wrench color={theme.textMuted} size={20} />
+                </TouchableOpacity>
+              ) : null}
+              <View
+                style={[
+                  styles.inputWrapper,
+                  { backgroundColor: theme.input, borderColor: theme.border },
+                ]}
+              >
+                <TextInput
+                  ref={textInputRef}
+                  value={inputText}
+                  style={[styles.textInput, { color: theme.text }]}
+                  onChangeText={(text) => {
+                    inputValueRef.current = text;
+                    setInputText(text);
+                    setHasText(text.trim().length > 0);
+                    // Detect @mention trigger: last word starting with @
+                    const match = text.match(/@([^\s@]*)$/);
+                    setMentionQuery(match ? match[1] : null);
+                    if (user?.uid) {
+                      firestoreService
+                        .setTypingStatus(
+                          groupId,
+                          user.uid,
+                          text.trim().length > 0,
+                        )
+                        .catch(() => {});
+                      if (typingTimeoutRef.current)
+                        clearTimeout(typingTimeoutRef.current);
+                      if (text.trim().length > 0) {
+                        typingTimeoutRef.current = setTimeout(() => {
+                          firestoreService
+                            .setTypingStatus(groupId, user.uid, false)
+                            .catch(() => {});
+                        }, 4000);
+                      }
+                    }
+                  }}
+                  placeholder={t("writeMessage")}
+                  placeholderTextColor={theme.textMuted}
+                  blurOnSubmit={false}
+                  multiline
+                  maxLength={500}
+                  textAlignVertical="top"
+                  scrollEnabled={false}
+                  underlineColorAndroid="transparent"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  onPress={handleSend}
+                  style={styles.sendButton}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("send") || "Enviar mensaje"}
+                  accessibilityHint="Doble toque para enviar el mensaje"
+                >
+                  <View style={styles.sendIconContainer}>
+                    <Send color={hasText ? "#4F46E5" : "#9CA3AF"} size={20} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
-      </Animated.View>
-      </KeyboardAvoidingView>
+      </ChatBodyShell>
 
       {/* Action sheet: editar / eliminar mensaje propio */}
       <Modal
@@ -1188,24 +1710,57 @@ export default function ChatScreen({ route, navigation }) {
           activeOpacity={1}
           onPress={() => setActionMsg(null)}
         >
-          <View style={[styles.actionSheet, { backgroundColor: theme.card, paddingBottom: Math.max(16, insets.bottom) }]}>
-            <View style={[styles.actionHandle, { backgroundColor: theme.border }]} />
-            <Text style={[styles.actionPreview, { color: theme.textMuted }]} numberOfLines={2}>
+          <View
+            style={[
+              styles.actionSheet,
+              {
+                backgroundColor: theme.card,
+                paddingBottom: Math.max(16, insets.bottom),
+              },
+            ]}
+          >
+            <View
+              style={[styles.actionHandle, { backgroundColor: theme.border }]}
+            />
+            <Text
+              style={[styles.actionPreview, { color: theme.textMuted }]}
+              numberOfLines={2}
+            >
               {actionMsg?.text}
             </Text>
-            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
-            <TouchableOpacity style={styles.actionRow} onPress={handleStartEdit}>
+            <View
+              style={[styles.actionDivider, { backgroundColor: theme.border }]}
+            />
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={handleStartEdit}
+            >
               <Pencil color="#4F46E5" size={20} />
-              <Text style={[styles.actionLabel, { color: theme.text }]}>{t('edit') + ' ' + t('messages')}</Text>
+              <Text style={[styles.actionLabel, { color: theme.text }]}>
+                {t("edit") + " " + t("messages")}
+              </Text>
             </TouchableOpacity>
-            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
+            <View
+              style={[styles.actionDivider, { backgroundColor: theme.border }]}
+            />
             <TouchableOpacity style={styles.actionRow} onPress={handleDelete}>
               <Trash2 color="#DC2626" size={20} />
-              <Text style={[styles.actionLabel, { color: "#DC2626" }]}>{t('deleteMessage')}</Text>
+              <Text style={[styles.actionLabel, { color: "#DC2626" }]}>
+                {t("deleteMessage")}
+              </Text>
             </TouchableOpacity>
-            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
-            <TouchableOpacity style={styles.actionRow} onPress={() => setActionMsg(null)}>
-              <Text style={[styles.actionCancel, { color: theme.textSecondary }]}>{t('cancel')}</Text>
+            <View
+              style={[styles.actionDivider, { backgroundColor: theme.border }]}
+            />
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => setActionMsg(null)}
+            >
+              <Text
+                style={[styles.actionCancel, { color: theme.textSecondary }]}
+              >
+                {t("cancel")}
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1222,9 +1777,18 @@ export default function ChatScreen({ route, navigation }) {
       >
         <View style={styles.editOverlay}>
           <View style={[styles.editCard, { backgroundColor: theme.card }]}>
-            <Text style={[styles.editTitle, { color: theme.text }]}>{t('edit') + ' ' + t('messages')}</Text>
+            <Text style={[styles.editTitle, { color: theme.text }]}>
+              {t("edit") + " " + t("messages")}
+            </Text>
             <TextInput
-              style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
+              style={[
+                styles.editInput,
+                {
+                  backgroundColor: theme.input,
+                  borderColor: theme.inputBorder,
+                  color: theme.text,
+                },
+              ]}
               value={editText}
               onChangeText={setEditText}
               multiline
@@ -1234,18 +1798,29 @@ export default function ChatScreen({ route, navigation }) {
             />
             <View style={styles.editActions}>
               <TouchableOpacity
-                style={[styles.editBtn, { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" }]}
+                style={[
+                  styles.editBtn,
+                  { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" },
+                ]}
                 onPress={() => setEditingMsg(null)}
                 disabled={editLoading}
               >
-                <Text style={[styles.editBtnCancel, { color: theme.text }]}>{t('cancel')}</Text>
+                <Text style={[styles.editBtnCancel, { color: theme.text }]}>
+                  {t("cancel")}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.editBtn, styles.editBtnSave, editLoading && { opacity: 0.6 }]}
+                style={[
+                  styles.editBtn,
+                  styles.editBtnSave,
+                  editLoading && { opacity: 0.6 },
+                ]}
                 onPress={handleSaveEdit}
                 disabled={editLoading}
               >
-                <Text style={styles.editBtnSaveText}>{editLoading ? t('loading') : t('save')}</Text>
+                <Text style={styles.editBtnSaveText}>
+                  {editLoading ? t("loading") : t("save")}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1267,49 +1842,76 @@ export default function ChatScreen({ route, navigation }) {
           onPress={() => setShowOnline(false)}
         >
           <View style={[styles.onlinePanel, { backgroundColor: theme.card }]}>
-            <Text style={[styles.onlineTitle, { color: "#4F46E5", borderBottomColor: theme.border }]}>{t('groupMembers')}</Text>
+            <Text
+              style={[
+                styles.onlineTitle,
+                { color: "#4F46E5", borderBottomColor: theme.border },
+              ]}
+            >
+              {t("groupMembers")}
+            </Text>
 
             {/* Conectados */}
             <Text style={styles.onlineSectionLabel}>
-              🟢 {t('online')} ({onlineMembers.length})
+              🟢 {t("online")} ({onlineMembers.length})
             </Text>
             {onlineMembers.length === 0 ? (
-              <Text style={styles.onlineEmpty}>{t('online')} - {t('noMessages')}</Text>
+              <Text style={styles.onlineEmpty}>
+                {t("online")} - {t("noMessages")}
+              </Text>
             ) : (
               onlineMembers.map((m) => (
                 <View key={m.id} style={styles.onlineMemberRow}>
                   <View style={styles.onlineIndicator} />
-                  <Text style={[styles.onlineMemberName, { color: theme.text }]}>{m.name}</Text>
+                  <Text
+                    style={[styles.onlineMemberName, { color: theme.text }]}
+                  >
+                    {getMemberName(m.id, m.name || m.displayName || m.username)}
+                  </Text>
                   {m.id === group?.leaderId && (
                     <View style={styles.onlineLeaderBadge}>
-                      <Text style={styles.onlineLeaderText}>{t('leader')}</Text>
+                      <Text style={styles.onlineLeaderText}>{t("leader")}</Text>
                     </View>
                   )}
                 </View>
               ))
             )}
 
-            <View style={[styles.onlineDivider, { backgroundColor: theme.border }]} />
+            <View
+              style={[styles.onlineDivider, { backgroundColor: theme.border }]}
+            />
 
             {/* Desconectados */}
             {(() => {
-              const onlineIds = onlineMembers.map(m => m.id);
-              const offline = members.filter(m => !onlineIds.includes(m.id));
+              const onlineIds = onlineMembers.map((m) => m.id);
+              const offline = members.filter((m) => !onlineIds.includes(m.id));
               return (
                 <>
                   <Text style={styles.offlineSectionLabel}>
-                    ⚫ {t('disconnected')} ({offline.length})
+                    ⚫ {t("disconnected")} ({offline.length})
                   </Text>
                   {offline.length === 0 ? (
-                    <Text style={styles.onlineEmpty}>{t('allConnected')}</Text>
+                    <Text style={styles.onlineEmpty}>{t("allConnected")}</Text>
                   ) : (
                     offline.map((m) => (
                       <View key={m.id} style={styles.onlineMemberRow}>
                         <View style={styles.offlineIndicator} />
-                        <Text style={[styles.offlineMemberName, { color: theme.textMuted }]}>{m.name}</Text>
+                        <Text
+                          style={[
+                            styles.offlineMemberName,
+                            { color: theme.textMuted },
+                          ]}
+                        >
+                          {getMemberName(
+                            m.id,
+                            m.name || m.displayName || m.username,
+                          )}
+                        </Text>
                         {m.id === group?.leaderId && (
                           <View style={styles.onlineLeaderBadge}>
-                            <Text style={styles.onlineLeaderText}>{t('leader')}</Text>
+                            <Text style={styles.onlineLeaderText}>
+                              {t("leader")}
+                            </Text>
                           </View>
                         )}
                       </View>
@@ -1323,41 +1925,114 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
       {/* Menú extra (3 puntos) */}
-      <Modal visible={showExtraMenu && isSubscriber} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowExtraMenu(false)} accessibilityViewIsModal={true}>
-        <TouchableOpacity style={styles.actionOverlay} activeOpacity={1} onPress={() => setShowExtraMenu(false)}>
-          <View style={[styles.actionSheet, { backgroundColor: theme.card, paddingBottom: Math.max(16, insets.bottom) }]}>
-            <View style={[styles.actionHandle, { backgroundColor: theme.border }]} />
-            <TouchableOpacity style={styles.actionRow} onPress={() => { setShowExtraMenu(false); setShowPollModal(true); }}>
+      <Modal
+        visible={showExtraMenu && isSubscriber}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setShowExtraMenu(false)}
+        accessibilityViewIsModal={true}
+      >
+        <TouchableOpacity
+          style={styles.actionOverlay}
+          activeOpacity={1}
+          onPress={() => setShowExtraMenu(false)}
+        >
+          <View
+            style={[
+              styles.actionSheet,
+              {
+                backgroundColor: theme.card,
+                paddingBottom: Math.max(16, insets.bottom),
+              },
+            ]}
+          >
+            <View
+              style={[styles.actionHandle, { backgroundColor: theme.border }]}
+            />
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => {
+                setShowExtraMenu(false);
+                setShowPollModal(true);
+              }}
+            >
               <BarChart2 color="#6366F1" size={22} />
-              <Text style={[styles.actionLabel, { color: theme.text }]}>{t('createPoll')}</Text>
+              <Text style={[styles.actionLabel, { color: theme.text }]}>
+                {t("createPoll")}
+              </Text>
             </TouchableOpacity>
-            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
-            <TouchableOpacity style={styles.actionRow} onPress={() => { setShowExtraMenu(false); setRouletteTitle(""); setRouletteItems(["", ""]); setRouletteResult(null); setRouletteCurrent(""); setShowRouletteModal(true); }}>
+            <View
+              style={[styles.actionDivider, { backgroundColor: theme.border }]}
+            />
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => {
+                setShowExtraMenu(false);
+                setRouletteTitle("");
+                setRouletteItems(["", ""]);
+                setRouletteResult(null);
+                setRouletteCurrent("");
+                setShowRouletteModal(true);
+              }}
+            >
               <Shuffle color="#6366F1" size={22} />
-              <Text style={[styles.actionLabel, { color: theme.text }]}>{t('rouletteTitle')}</Text>
+              <Text style={[styles.actionLabel, { color: theme.text }]}>
+                {t("rouletteTitle")}
+              </Text>
             </TouchableOpacity>
-            <View style={[styles.actionDivider, { backgroundColor: theme.border }]} />
-            <TouchableOpacity style={styles.actionRow} onPress={() => setShowExtraMenu(false)}>
-              <Text style={[styles.actionCancel, { color: theme.textSecondary }]}>{t('cancel')}</Text>
+            <View
+              style={[styles.actionDivider, { backgroundColor: theme.border }]}
+            />
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => setShowExtraMenu(false)}
+            >
+              <Text
+                style={[styles.actionCancel, { color: theme.textSecondary }]}
+              >
+                {t("cancel")}
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
       {/* Modal encuesta */}
-      <Modal visible={showPollModal && isSubscriber} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowPollModal(false)} accessibilityViewIsModal={true}>
+      <Modal
+        visible={showPollModal && isSubscriber}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setShowPollModal(false)}
+        accessibilityViewIsModal={true}
+      >
         <View style={styles.editOverlay}>
-          <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "80%" }]}>
+          <View
+            style={[
+              styles.editCard,
+              { backgroundColor: theme.card, maxHeight: "80%" },
+            ]}
+          >
             <View style={styles.modalTitleRow}>
               <BarChart2 color="#6366F1" size={18} />
-              <Text style={[styles.editTitle, { color: theme.text }]}>{t('newPoll')}</Text>
+              <Text style={[styles.editTitle, { color: theme.text }]}>
+                {t("newPoll")}
+              </Text>
               <TouchableOpacity onPress={() => setShowPollModal(false)}>
                 <X color={theme.textMuted} size={20} />
               </TouchableOpacity>
             </View>
             <TextInput
-              style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-              placeholder={t('pollQuestion')}
+              style={[
+                styles.editInput,
+                {
+                  backgroundColor: theme.input,
+                  borderColor: theme.inputBorder,
+                  color: theme.text,
+                },
+              ]}
+              placeholder={t("pollQuestion")}
               placeholderTextColor={theme.textMuted}
               value={pollQuestion}
               onChangeText={setPollQuestion}
@@ -1366,36 +2041,79 @@ export default function ChatScreen({ route, navigation }) {
             {pollOptions.map((opt, i) => (
               <View key={i} style={styles.pollOptionRow}>
                 <TextInput
-                  style={[styles.pollOptionInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                  placeholder={i === 0 ? t('option1') : i === 1 ? t('option2') : `${i + 1}`}
+                  style={[
+                    styles.pollOptionInput,
+                    {
+                      backgroundColor: theme.input,
+                      borderColor: theme.inputBorder,
+                      color: theme.text,
+                    },
+                  ]}
+                  placeholder={
+                    i === 0 ? t("option1") : i === 1 ? t("option2") : `${i + 1}`
+                  }
                   placeholderTextColor={theme.textMuted}
                   value={opt}
-                  onChangeText={(t) => { const arr = [...pollOptions]; arr[i] = t; setPollOptions(arr); }}
+                  onChangeText={(t) => {
+                    const arr = [...pollOptions];
+                    arr[i] = t;
+                    setPollOptions(arr);
+                  }}
                   maxLength={80}
                 />
                 {pollOptions.length > 2 && (
-                  <TouchableOpacity onPress={() => setPollOptions(pollOptions.filter((_, j) => j !== i))} style={styles.pollRemoveBtn}>
+                  <TouchableOpacity
+                    onPress={() =>
+                      setPollOptions(pollOptions.filter((_, j) => j !== i))
+                    }
+                    style={styles.pollRemoveBtn}
+                  >
                     <X color="#EF4444" size={16} />
                   </TouchableOpacity>
                 )}
               </View>
             ))}
             {pollOptions.length < 6 && (
-              <TouchableOpacity style={[styles.addOptionBtn, { borderColor: theme.border }]} onPress={() => setPollOptions([...pollOptions, ""])}>
+              <TouchableOpacity
+                style={[styles.addOptionBtn, { borderColor: theme.border }]}
+                onPress={() => setPollOptions([...pollOptions, ""])}
+              >
                 <Plus color="#6366F1" size={16} />
-                <Text style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}>{t('addOption')}</Text>
+                <Text
+                  style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}
+                >
+                  {t("addOption")}
+                </Text>
               </TouchableOpacity>
             )}
             <View style={styles.editActions}>
-              <TouchableOpacity style={[styles.editBtn, { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" }]} onPress={() => setShowPollModal(false)}>
-                <Text style={[styles.editBtnCancel, { color: theme.text }]}>{t('cancel')}</Text>
+              <TouchableOpacity
+                style={[
+                  styles.editBtn,
+                  { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" },
+                ]}
+                onPress={() => setShowPollModal(false)}
+              >
+                <Text style={[styles.editBtnCancel, { color: theme.text }]}>
+                  {t("cancel")}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.editBtn, styles.editBtnSave, (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) && { opacity: 0.5 }]}
+                style={[
+                  styles.editBtn,
+                  styles.editBtnSave,
+                  (!pollQuestion.trim() ||
+                    pollOptions.filter((o) => o.trim()).length < 2) && {
+                    opacity: 0.5,
+                  },
+                ]}
                 onPress={handleSendPoll}
-                disabled={!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2}
+                disabled={
+                  !pollQuestion.trim() ||
+                  pollOptions.filter((o) => o.trim()).length < 2
+                }
               >
-                <Text style={styles.editBtnSaveText}>{t('send')}</Text>
+                <Text style={styles.editBtnSaveText}>{t("send")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1403,23 +2121,54 @@ export default function ChatScreen({ route, navigation }) {
       </Modal>
 
       {/* Modal ruleta */}
-      <Modal visible={showRouletteModal && isSubscriber} transparent animationType="slide" statusBarTranslucent onRequestClose={() => { if (!rouletteSpinning) setShowRouletteModal(false); }} accessibilityViewIsModal={true}>
+      <Modal
+        visible={showRouletteModal && isSubscriber}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => {
+          if (!rouletteSpinning) setShowRouletteModal(false);
+        }}
+        accessibilityViewIsModal={true}
+      >
         <View style={styles.editOverlay}>
-          <View style={[styles.editCard, { backgroundColor: theme.card, maxHeight: "90%" }]}>
+          <View
+            style={[
+              styles.editCard,
+              { backgroundColor: theme.card, maxHeight: "90%" },
+            ]}
+          >
             {/* Header */}
             <View style={styles.modalTitleRow}>
               <Shuffle color="#6366F1" size={18} />
-              <Text style={[styles.editTitle, { color: theme.text }]}>{t('rouletteTitle')}</Text>
-              <TouchableOpacity onPress={() => { if (!rouletteSpinning) setShowRouletteModal(false); }}>
+              <Text style={[styles.editTitle, { color: theme.text }]}>
+                {t("rouletteTitle")}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!rouletteSpinning) setShowRouletteModal(false);
+                }}
+              >
                 <X color={theme.textMuted} size={20} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 14, paddingBottom: 4 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ gap: 14, paddingBottom: 4 }}
+            >
               {/* Título del sorteo */}
               <TextInput
-                style={[styles.editInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                placeholder={t('rouletteTitle')}
+                style={[
+                  styles.editInput,
+                  {
+                    backgroundColor: theme.input,
+                    borderColor: theme.inputBorder,
+                    color: theme.text,
+                  },
+                ]}
+                placeholder={t("rouletteTitle")}
                 placeholderTextColor={theme.textMuted}
                 value={rouletteTitle}
                 onChangeText={setRouletteTitle}
@@ -1430,7 +2179,14 @@ export default function ChatScreen({ route, navigation }) {
               {/* Chips de miembros */}
               {members.length > 0 && (
                 <View style={styles.memberChipsSection}>
-                  <Text style={[styles.memberChipsLabel, { color: theme.textSecondary }]}>{t('addMembers')}</Text>
+                  <Text
+                    style={[
+                      styles.memberChipsLabel,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    {t("addMembers")}
+                  </Text>
                   <View style={styles.memberChipsRow}>
                     {members.map((m) => {
                       const selected = rouletteItems.includes(m.name);
@@ -1440,19 +2196,49 @@ export default function ChatScreen({ route, navigation }) {
                           style={[
                             styles.memberChip,
                             {
-                              backgroundColor: selected ? "#6366F1" : (theme.dark ? "#374151" : "#F3F4F6"),
+                              backgroundColor: selected
+                                ? "#6366F1"
+                                : theme.dark
+                                  ? "#374151"
+                                  : "#F3F4F6",
                               borderColor: selected ? "#6366F1" : theme.border,
                             },
                           ]}
-                          onPress={() => !rouletteSpinning && toggleMemberInRoulette(m.name)}
+                          onPress={() =>
+                            !rouletteSpinning && toggleMemberInRoulette(m.name)
+                          }
                           disabled={rouletteSpinning}
                         >
-                          <View style={[styles.memberChipAvatar, { backgroundColor: selected ? "#4338CA" : (theme.dark ? "#4B5563" : "#E5E7EB") }]}>
-                            <Text style={[styles.memberChipInitial, { color: selected ? "#E0E7FF" : theme.textMuted }]}>
-                              {m.name?.[0]?.toUpperCase() || "?"}
+                          <View
+                            style={[
+                              styles.memberChipAvatar,
+                              {
+                                backgroundColor: selected
+                                  ? "#4338CA"
+                                  : theme.dark
+                                    ? "#4B5563"
+                                    : "#E5E7EB",
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.memberChipInitial,
+                                {
+                                  color: selected ? "#E0E7FF" : theme.textMuted,
+                                },
+                              ]}
+                            >
+                              {initialsFromDisplayName(m.name || "") || "?"}
                             </Text>
                           </View>
-                          <Text style={[styles.memberChipName, { color: selected ? "#FFFFFF" : theme.text }]} numberOfLines={1}>
+                          <Text
+                            style={[
+                              styles.memberChipName,
+                              { color: selected ? "#FFFFFF" : theme.text },
+                            ]}
+                            numberOfLines={1}
+                          >
                             {m.name?.split(" ")[0]}
                           </Text>
                         </TouchableOpacity>
@@ -1464,58 +2250,151 @@ export default function ChatScreen({ route, navigation }) {
 
               {/* Lista manual de elementos */}
               <View style={styles.rouletteItemsSection}>
-                <Text style={[styles.memberChipsLabel, { color: theme.textSecondary }]}>{t('rouletteOptions')}</Text>
+                <Text
+                  style={[
+                    styles.memberChipsLabel,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  {t("rouletteOptions")}
+                </Text>
                 {rouletteItems.map((item, i) => (
                   <View key={i} style={styles.pollOptionRow}>
                     <TextInput
-                      style={[styles.pollOptionInput, { backgroundColor: theme.input, borderColor: theme.inputBorder, color: theme.text }]}
-                      placeholder={i === 0 ? t('element1') : i === 1 ? t('element2') : `${i + 1}`}
+                      style={[
+                        styles.pollOptionInput,
+                        {
+                          backgroundColor: theme.input,
+                          borderColor: theme.inputBorder,
+                          color: theme.text,
+                        },
+                      ]}
+                      placeholder={
+                        i === 0
+                          ? t("element1")
+                          : i === 1
+                            ? t("element2")
+                            : `${i + 1}`
+                      }
                       placeholderTextColor={theme.textMuted}
                       value={item}
-                      onChangeText={(t) => { const arr = [...rouletteItems]; arr[i] = t; setRouletteItems(arr); }}
+                      onChangeText={(t) => {
+                        const arr = [...rouletteItems];
+                        arr[i] = t;
+                        setRouletteItems(arr);
+                      }}
                       maxLength={60}
                       editable={!rouletteSpinning}
                     />
                     {rouletteItems.length > 2 && (
-                      <TouchableOpacity onPress={() => setRouletteItems(rouletteItems.filter((_, j) => j !== i))} style={styles.pollRemoveBtn} disabled={rouletteSpinning}>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setRouletteItems(
+                            rouletteItems.filter((_, j) => j !== i),
+                          )
+                        }
+                        style={styles.pollRemoveBtn}
+                        disabled={rouletteSpinning}
+                      >
                         <X color="#EF4444" size={16} />
                       </TouchableOpacity>
                     )}
                   </View>
                 ))}
                 {rouletteItems.length < 10 && (
-                  <TouchableOpacity style={[styles.addOptionBtn, { borderColor: theme.border }]} onPress={() => setRouletteItems([...rouletteItems, ""])} disabled={rouletteSpinning}>
+                  <TouchableOpacity
+                    style={[styles.addOptionBtn, { borderColor: theme.border }]}
+                    onPress={() => setRouletteItems([...rouletteItems, ""])}
+                    disabled={rouletteSpinning}
+                  >
                     <Plus color="#6366F1" size={16} />
-                    <Text style={{ color: "#6366F1", fontSize: 13, fontWeight: "600" }}>{t('addElement')}</Text>
+                    <Text
+                      style={{
+                        color: "#6366F1",
+                        fontSize: 13,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {t("addElement")}
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
             </ScrollView>
 
             {rouletteResult && (
-              <View style={[styles.rouletteWinnerBanner, { backgroundColor: theme.dark ? "#312E81" : "#EDE9FE" }]}>
-                <Text style={[styles.rouletteWinnerBannerLabel, { color: theme.dark ? "#A5B4FC" : "#6D28D9" }]}>🏆 {t('winner')}</Text>
-                <Text style={[styles.rouletteWinnerBannerName, { color: theme.dark ? "#E0E7FF" : "#4C1D95" }]} numberOfLines={1}>{rouletteResult}</Text>
+              <View
+                style={[
+                  styles.rouletteWinnerBanner,
+                  { backgroundColor: theme.dark ? "#312E81" : "#EDE9FE" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.rouletteWinnerBannerLabel,
+                    { color: theme.dark ? "#A5B4FC" : "#6D28D9" },
+                  ]}
+                >
+                  🏆 {t("winner")}
+                </Text>
+                <Text
+                  style={[
+                    styles.rouletteWinnerBannerName,
+                    { color: theme.dark ? "#E0E7FF" : "#4C1D95" },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {rouletteResult}
+                </Text>
               </View>
             )}
 
             <View style={[styles.editActions, { marginTop: 8 }]}>
               {rouletteResult ? (
                 <>
-                  <TouchableOpacity style={[styles.editBtn, { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" }]} onPress={() => { setRouletteResult(null); setRouletteCurrent(""); }}>
-                    <Text style={[styles.editBtnCancel, { color: theme.text }]}>{t('spinAgain')}</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.editBtn,
+                      { backgroundColor: theme.dark ? "#374151" : "#F3F4F6" },
+                    ]}
+                    onPress={() => {
+                      setRouletteResult(null);
+                      setRouletteCurrent("");
+                    }}
+                  >
+                    <Text style={[styles.editBtnCancel, { color: theme.text }]}>
+                      {t("spinAgain")}
+                    </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.editBtn, styles.editBtnSave]} onPress={handleSendRouletteResult}>
-                    <Text style={styles.editBtnSaveText}>{t('sendToChat')}</Text>
+                  <TouchableOpacity
+                    style={[styles.editBtn, styles.editBtnSave]}
+                    onPress={handleSendRouletteResult}
+                  >
+                    <Text style={styles.editBtnSaveText}>
+                      {t("sendToChat")}
+                    </Text>
                   </TouchableOpacity>
                 </>
               ) : (
                 <TouchableOpacity
-                  style={[styles.editBtn, styles.editBtnSave, { flex: 1 }, (rouletteSpinning || rouletteItems.filter(i => i.trim()).length < 2) && { opacity: 0.5 }]}
+                  style={[
+                    styles.editBtn,
+                    styles.editBtnSave,
+                    { flex: 1 },
+                    (rouletteSpinning ||
+                      rouletteItems.filter((i) => i.trim()).length < 2) && {
+                      opacity: 0.5,
+                    },
+                  ]}
                   onPress={handleSpin}
-                  disabled={rouletteSpinning || rouletteItems.filter(i => i.trim()).length < 2}
+                  disabled={
+                    rouletteSpinning ||
+                    rouletteItems.filter((i) => i.trim()).length < 2
+                  }
                 >
-                  <Text style={styles.editBtnSaveText}>{rouletteSpinning ? t('spinning') : "🎡 Girar"}</Text>
+                  <Text style={styles.editBtnSaveText}>
+                    {rouletteSpinning ? t("spinning") : "🎡 Girar"}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1570,7 +2449,7 @@ const styles = StyleSheet.create({
   messageWrapperMe: { alignSelf: "flex-end", alignItems: "flex-end" },
   messageWrapperOther: { alignSelf: "flex-start", alignItems: "flex-start" },
   messageWrapperHighlighted: {
-    backgroundColor: 'rgba(251,191,36,0.2)',
+    backgroundColor: "rgba(251,191,36,0.2)",
     borderRadius: 18,
     paddingHorizontal: 6,
     marginHorizontal: -6,
@@ -1798,11 +2677,11 @@ const styles = StyleSheet.create({
   mentionList: {
     borderTopWidth: 1,
     maxHeight: 180,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   mentionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 10,
@@ -1812,16 +2691,16 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
-  mentionAvatarText: { fontSize: 13, fontWeight: '700', color: '#4F46E5' },
-  mentionName: { flex: 1, fontSize: 14, fontWeight: '600' },
+  mentionAvatarText: { fontSize: 13, fontWeight: "700", color: "#4F46E5" },
+  mentionName: { flex: 1, fontSize: 14, fontWeight: "600" },
   mentionLeader: {
     fontSize: 11,
-    color: '#4F46E5',
-    fontWeight: '700',
-    backgroundColor: '#EEF2FF',
+    color: "#4F46E5",
+    fontWeight: "700",
+    backgroundColor: "#EEF2FF",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1836,7 +2715,7 @@ const styles = StyleSheet.create({
   },
   replyQuoteAuthor: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 2,
   },
   replyQuoteText: {
@@ -1844,8 +2723,8 @@ const styles = StyleSheet.create({
   },
   // Reply bar above input
   replyBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderTopWidth: 1,
@@ -1853,7 +2732,7 @@ const styles = StyleSheet.create({
   },
   replyBarAuthor: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 1,
   },
   replyBarText: {
