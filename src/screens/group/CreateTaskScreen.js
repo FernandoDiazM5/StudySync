@@ -8,7 +8,6 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  StatusBar,
   Platform,
 } from "react-native";
 import Text from "../../components/AppText";
@@ -138,10 +137,6 @@ export default function CreateTaskScreen({ route, navigation }) {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar
-        barStyle={theme.dark ? "light-content" : "dark-content"}
-        backgroundColor={theme.card}
-      />
       <View
         style={[
           s.header,

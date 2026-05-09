@@ -21,7 +21,6 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
-  StatusBar,
   Modal,
   Alert,
   Vibration,
@@ -1347,8 +1346,6 @@ export default function ChatScreen({ route, navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
-
       {/* Header */}
       <View
         style={[styles.header, { backgroundColor: theme.headerBg }]}

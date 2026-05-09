@@ -24,6 +24,7 @@
     "expo-device": "~8.0.10",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.22",
+    "expo-navigation-bar": "~5.0.10",
     "expo-notifications": "~0.32.17",
     "expo-speech": "~14.0.8",
     "expo-splash-screen": "~31.0.13",

@@ -4,7 +4,6 @@ import {
   View,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
   SectionList,
   ScrollView,
@@ -369,8 +368,6 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
-
       {/* Header */}
       <View
         style={[

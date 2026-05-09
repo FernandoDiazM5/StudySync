@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
   ActionSheetIOS,
   Alert,
@@ -296,8 +295,6 @@ export default function TaskInboxScreen({ route, navigation }) {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
-
       {/* Header */}
       <View
         style={[

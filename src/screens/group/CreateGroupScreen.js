@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  StatusBar,
 } from "react-native";
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
@@ -52,10 +51,6 @@ export default function CreateGroupScreen({ navigation }) {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar
-        barStyle={theme.dark ? "light-content" : "dark-content"}
-        backgroundColor={theme.card}
-      />
       <View style={[s.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <AppButton
           onPress={() => navigation.goBack()}

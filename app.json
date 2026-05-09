@@ -23,7 +23,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "navigationBarColor": "#FFFFFF"
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -20,7 +20,6 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  StatusBar,
   Modal,
   Linking,
   Image,
@@ -1677,11 +1676,6 @@ export default function GroupDetailsScreen({ route, navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <StatusBar
-        barStyle={theme.dark ? "light-content" : "dark-content"}
-        backgroundColor={theme.card}
-      />
-
       {/* Header */}
       <View
         style={[

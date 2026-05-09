@@ -1,58 +1,37 @@
-import React, { useCallback, useEffect } from "react";
-import {
-  AppState,
-  Platform,
-  StatusBar as RNStatusBar,
-} from "react-native";
+import React, { useEffect } from "react";
+import { AppState, Platform } from "react-native";
 import {
   StatusBar as ExpoStatusBar,
   setStatusBarBackgroundColor,
   setStatusBarStyle,
   setStatusBarTranslucent,
 } from "expo-status-bar";
+import * as NavigationBar from "expo-navigation-bar";
 import { useTheme } from "../contexts/ThemeContext";
 
-/**
- * Barra de estado según tema. Android: expo-status-bar + API imperativa.
- * Con `android.edgeToEdgeEnabled: true`, el fondo opaco de la barra no aplica
- * (Expo/Android lo ignoran); por eso el proyecto usa edge-to-edge desactivado
- * salvo que en el futuro se migre a scrim + safe area.
- */
 export default function AppStatusBar() {
   const { theme } = useTheme();
   const bg = theme.headerBg;
-  /** 'light' = iconos/hora claros (cabecera oscura); no confundir con theme.dark (modo claro/oscuro UI). */
   const style = theme.statusBarStyle ?? (theme.dark ? "light" : "dark");
-  const barStyleRN = style === "light" ? "light-content" : "dark-content";
 
-  const applyAndroidStatusBar = useCallback(() => {
+  useEffect(() => {
     if (Platform.OS !== "android") return;
-    try {
+
+    const apply = () => {
       setStatusBarTranslucent(false);
       setStatusBarBackgroundColor(bg);
       setStatusBarStyle(style);
-      RNStatusBar.setTranslucent(false);
-      RNStatusBar.setBackgroundColor(bg, true);
-      RNStatusBar.setBarStyle(barStyleRN, true);
-    } catch {
-      /* noop */
-    }
-  }, [bg, style, barStyleRN]);
+      NavigationBar.setBackgroundColorAsync(theme.tabBg).catch(() => {});
+      NavigationBar.setButtonStyleAsync(theme.dark ? "light" : "dark").catch(() => {});
+    };
 
-  useEffect(() => {
-    applyAndroidStatusBar();
-    if (Platform.OS !== "android") return;
-    const id = requestAnimationFrame(() => applyAndroidStatusBar());
-    return () => cancelAnimationFrame(id);
-  }, [applyAndroidStatusBar]);
+    apply();
 
-  useEffect(() => {
-    if (Platform.OS !== "android") return;
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") applyAndroidStatusBar();
+      if (state === "active") apply();
     });
     return () => sub.remove();
-  }, [applyAndroidStatusBar]);
+  }, [bg, style, theme.tabBg, theme.dark]);
 
   return (
     <ExpoStatusBar

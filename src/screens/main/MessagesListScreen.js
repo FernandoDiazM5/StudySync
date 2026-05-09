@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
 } from "react-native";
 import Text from "../../components/AppText";
@@ -203,7 +202,6 @@ export default function MessagesListScreen({ navigation }) {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
       <View style={[s.header, { backgroundColor: theme.headerBg }]}>
         <Text style={s.headerTitle}>{t('messages')}</Text>
       </View>

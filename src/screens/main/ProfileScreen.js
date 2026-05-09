@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  StatusBar,
   Image,
   ActivityIndicator,
   TouchableOpacity,
@@ -250,7 +249,7 @@ export default function ProfileScreen() {
         style={[s.container, { backgroundColor: theme.bg }]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
+
         <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
           <AppButton
             onPress={() => setSubView("main")}
@@ -361,7 +360,7 @@ export default function ProfileScreen() {
   if (subView === "password") {
     return (
       <View style={[s.container, { backgroundColor: theme.bg }]}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
+
         <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
           <AppButton
             onPress={() => setSubView("main")}
@@ -530,7 +529,6 @@ export default function ProfileScreen() {
   // === MAIN PROFILE VIEW ===
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
       <ScrollView
         style={s.profileScroll}
         contentContainerStyle={{

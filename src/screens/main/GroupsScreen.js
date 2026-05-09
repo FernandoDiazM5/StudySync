@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  StatusBar,
   Alert,
   Modal,
   Pressable,
@@ -513,10 +512,8 @@ export default function GroupsScreen({ navigation, route }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
-
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.headerBg }]}>
+      <View style={[styles.header, { backgroundColor: theme.headerBg, paddingTop: insets.top + 12 }]}>
         <View>
           <Text style={styles.headerTitle}>StudySync</Text>
           <Text style={styles.headerSubtitle}>{t('workspaceSubtitle')}</Text>
@@ -753,7 +750,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#4F46E5",
     paddingHorizontal: 16,
     paddingVertical: 16,
-    paddingTop: 48,
+    paddingTop: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
