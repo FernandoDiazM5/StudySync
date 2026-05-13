@@ -4,7 +4,13 @@
 // Vista principal de "Mis Grupos"
 // ============================================
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   View,
   TextInput,
@@ -54,10 +60,34 @@ import * as firestoreService from "../../services/firestoreService";
 // ── Paleta del indicador de riesgo — familia indigo/violet de la app ─────────
 // L1 suave → L4 violeta, coherente con #4F46E5 / #6366F1 / #7C3AED
 const RISK_PALETTE = [
-  { bar: '#818CF8', lightBg: '#EEF2FF', lightBorder: '#C7D2FE', darkBg: 'rgba(129,140,248,0.10)', darkBorder: 'rgba(129,140,248,0.22)' }, // bajo
-  { bar: '#6366F1', lightBg: '#E0E7FF', lightBorder: '#A5B4FC', darkBg: 'rgba(99,102,241,0.12)',  darkBorder: 'rgba(99,102,241,0.26)'  }, // medio
-  { bar: '#4F46E5', lightBg: '#EEF2FF', lightBorder: '#818CF8', darkBg: 'rgba(79,70,229,0.14)',   darkBorder: 'rgba(79,70,229,0.30)'   }, // alto
-  { bar: '#7C3AED', lightBg: '#EDE9FE', lightBorder: '#C4B5FD', darkBg: 'rgba(124,58,237,0.14)',  darkBorder: 'rgba(124,58,237,0.30)'  }, // crítico
+  {
+    bar: "#818CF8",
+    lightBg: "#EEF2FF",
+    lightBorder: "#C7D2FE",
+    darkBg: "rgba(129,140,248,0.10)",
+    darkBorder: "rgba(129,140,248,0.22)",
+  }, // bajo
+  {
+    bar: "#6366F1",
+    lightBg: "#E0E7FF",
+    lightBorder: "#A5B4FC",
+    darkBg: "rgba(99,102,241,0.12)",
+    darkBorder: "rgba(99,102,241,0.26)",
+  }, // medio
+  {
+    bar: "#4F46E5",
+    lightBg: "#EEF2FF",
+    lightBorder: "#818CF8",
+    darkBg: "rgba(79,70,229,0.14)",
+    darkBorder: "rgba(79,70,229,0.30)",
+  }, // alto
+  {
+    bar: "#7C3AED",
+    lightBg: "#EDE9FE",
+    lightBorder: "#C4B5FD",
+    darkBg: "rgba(124,58,237,0.14)",
+    darkBorder: "rgba(124,58,237,0.30)",
+  }, // crítico
 ];
 
 /**
@@ -80,32 +110,32 @@ const RISK_PALETTE = [
  *     ≥ 1  → 2 medio   · > 0  → 1 bajo   · 0 → oculto
  */
 const getRiskLevel = (tasks) => {
-  const now   = new Date();
+  const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const active = tasks.filter(
-    (t) => t.status !== 'Completada' && t.dueDate && t.dueDate !== 'Sin fecha'
+    (t) => t.status !== "Completada" && t.dueDate && t.dueDate !== "Sin fecha",
   );
   if (!active.length) return 0;
 
   let score = 0;
 
   active.forEach((task) => {
-    const [y, m, d] = task.dueDate.split('-').map(Number);
-    const daysLeft  = Math.floor((new Date(y, m - 1, d) - today) / 86400000);
+    const [y, m, d] = task.dueDate.split("-").map(Number);
+    const daysLeft = Math.floor((new Date(y, m - 1, d) - today) / 86400000);
 
-    if      (daysLeft < 0)   score += 4;
+    if (daysLeft < 0) score += 4;
     else if (daysLeft === 0) score += 3;
     else if (daysLeft === 1) score += 2;
-    else if (daysLeft <= 3)  score += 1;
-    else if (daysLeft <= 7)  score += 0.5;
+    else if (daysLeft <= 3) score += 1;
+    else if (daysLeft <= 7) score += 0.5;
     else if (daysLeft <= 14) score += 0.2;
   });
 
-  if (score >= 3) return 4;  // vencida (4) o vence hoy (3) → crítico
-  if (score >= 2) return 3;  // vence mañana, o 2 tareas en 2-3 días → alto
-  if (score >= 1) return 2;  // vence en 2-3 días, o varias en la semana → medio
-  if (score >  0) return 1;  // alguna tarea en ≤14 días → bajo
+  if (score >= 3) return 4; // vencida (4) o vence hoy (3) → crítico
+  if (score >= 2) return 3; // vence mañana, o 2 tareas en 2-3 días → alto
+  if (score >= 1) return 2; // vence en 2-3 días, o varias en la semana → medio
+  if (score > 0) return 1; // alguna tarea en ≤14 días → bajo
   return 0;
 };
 
@@ -119,7 +149,7 @@ export default function GroupsScreen({ navigation, route }) {
   const [invitations, setInvitations] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('Todas');
+  const [statusFilter, setStatusFilter] = useState("Todas");
   const [filterOpen, setFilterOpen] = useState(false);
 
   const flatListRef = useRef(null);
@@ -194,7 +224,11 @@ export default function GroupsScreen({ navigation, route }) {
       // construido desde el snapshot guardado en la invitación, sin necesitar
       // una lectura adicional al documento de grupo (evita posibles errores de
       // reglas de seguridad antes de que el listener onSnapshot se re-evalúe).
-      const groupData = await acceptInvitation(invitation.id, invitation.groupId, user.uid);
+      const groupData = await acceptInvitation(
+        invitation.id,
+        invitation.groupId,
+        user.uid,
+      );
 
       // Mostrar el grupo de inmediato sin esperar al listener de Firestore.
       // (El listener también actualizará eventualmente con los datos completos.)
@@ -205,10 +239,10 @@ export default function GroupsScreen({ navigation, route }) {
             : [groupData, ...prev],
         );
         // Si había un filtro activo, resetearlo para que el grupo recién unido sea visible.
-        setStatusFilter('Todas');
+        setStatusFilter("Todas");
       }
     } catch (e) {
-      console.error('[handleAcceptInvitation]', e);
+      console.error("[handleAcceptInvitation]", e);
       Alert.alert("Error", e.message || "No se pudo aceptar la invitación");
     }
   };
@@ -286,17 +320,19 @@ export default function GroupsScreen({ navigation, route }) {
   // Helper: estado derivado de las tareas de un grupo
   const getGroupStatus = (groupId) => {
     const tasks = groupTasks[groupId] || [];
-    if (tasks.length === 0) return 'sin_tareas';
-    const pending = tasks.filter((t) => t.status === 'Pendiente' || t.status === 'En progreso').length;
-    return pending > 0 ? 'pendiente' : 'al_dia';
+    if (tasks.length === 0) return "sin_tareas";
+    const pending = tasks.filter(
+      (t) => t.status === "Pendiente" || t.status === "En progreso",
+    ).length;
+    return pending > 0 ? "pendiente" : "al_dia";
   };
 
   const STATUS_FILTERS = useMemo(
     () => [
-      { key: 'Todas', label: t('all') },
-      { key: 'pendiente', label: t('groupsFilterWithPending') },
-      { key: 'al_dia', label: t('workUpToDate') },
-      { key: 'sin_tareas', label: t('workNotStarted') },
+      { key: "Todas", label: t("all") },
+      { key: "pendiente", label: t("groupsFilterWithPending") },
+      { key: "al_dia", label: t("workUpToDate") },
+      { key: "sin_tareas", label: t("workNotStarted") },
     ],
     [t],
   );
@@ -305,49 +341,50 @@ export default function GroupsScreen({ navigation, route }) {
     const matchesSearch =
       g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (g.desc && g.desc.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesStatus = statusFilter === 'Todas' || getGroupStatus(g.id) === statusFilter;
+    const matchesStatus =
+      statusFilter === "Todas" || getGroupStatus(g.id) === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const handleDeleteGroup = (group) => {
     Alert.alert(
-      t('confirm') || 'Confirmar',
+      t("confirm") || "Confirmar",
       `¿Estás seguro de que deseas eliminar el grupo "${group.name}"? Se borrarán todos los mensajes, tareas y archivos.`,
       [
-        { text: t('cancel') || 'Cancelar', style: 'cancel' },
+        { text: t("cancel") || "Cancelar", style: "cancel" },
         {
-          text: t('delete') || 'Eliminar',
-          style: 'destructive',
+          text: t("delete") || "Eliminar",
+          style: "destructive",
           onPress: async () => {
             try {
               await firestoreService.deleteGroup(group.id);
             } catch (e) {
-              Alert.alert('Error', 'No se pudo eliminar el grupo');
+              Alert.alert("Error", "No se pudo eliminar el grupo");
             }
           },
         },
-      ]
+      ],
     );
   };
 
   const handleLeaveGroup = (group) => {
     Alert.alert(
-      t('confirm') || 'Confirmar',
+      t("confirm") || "Confirmar",
       `¿Deseas salir del grupo "${group.name}"?`,
       [
-        { text: t('cancel') || 'Cancelar', style: 'cancel' },
+        { text: t("cancel") || "Cancelar", style: "cancel" },
         {
-          text: 'Salir',
-          style: 'destructive',
+          text: "Salir",
+          style: "destructive",
           onPress: async () => {
             try {
               await firestoreService.leaveGroup(group.id, user.uid);
             } catch (e) {
-              Alert.alert('Error', 'No se pudo salir del grupo');
+              Alert.alert("Error", "No se pudo salir del grupo");
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -365,11 +402,9 @@ export default function GroupsScreen({ navigation, route }) {
 
     const isLeader = group.leaderId === user?.uid;
     const isPro = (userProfile?.plan || "free") === "personal";
-    const leaderHasPersonal =
-      (group.leaderPlan || "free") === "personal";
+    const leaderHasPersonal = (group.leaderPlan || "free") === "personal";
     // Barra: tareas de este grupo; visible si tú tienes Personal o el líder de este grupo (no cruza datos con otros grupos).
-    const showProgressBar =
-      totalTasks > 0 && (isPro || leaderHasPersonal);
+    const showProgressBar = totalTasks > 0 && (isPro || leaderHasPersonal);
     // Riesgo: solo líder suscrito (tu plan).
     const riskLevel = isLeader && isPro ? getRiskLevel(tasks) : 0;
     const riskPal = riskLevel > 0 ? RISK_PALETTE[riskLevel - 1] : null;
@@ -377,8 +412,8 @@ export default function GroupsScreen({ navigation, route }) {
     const swipeActions = [
       {
         icon: <MessageSquare color="#FFFFFF" size={22} />,
-        label: 'Chat',
-        bgColor: '#4F46E5',
+        label: "Chat",
+        bgColor: "#4F46E5",
         onPress: () =>
           navigation.navigate("Chat", {
             groupId: group.id,
@@ -389,14 +424,14 @@ export default function GroupsScreen({ navigation, route }) {
       isLeader
         ? {
             icon: <Trash2 color="#FFFFFF" size={22} />,
-            label: t('delete') || 'Eliminar',
-            bgColor: '#312E81',
+            label: t("delete") || "Eliminar",
+            bgColor: "#312E81",
             onPress: () => handleDeleteGroup(group),
           }
         : {
             icon: <LogOut color="#FFFFFF" size={22} />,
-            label: 'Salir',
-            bgColor: '#7C3AED',
+            label: "Salir",
+            bgColor: "#7C3AED",
             onPress: () => handleLeaveGroup(group),
           },
     ];
@@ -427,32 +462,46 @@ export default function GroupsScreen({ navigation, route }) {
                   <Crown size={13} color="#4F46E5" strokeWidth={2.2} />
                 )}
                 <Text
-                  style={[styles.groupName, { color: theme.text }, isLeader && { color: theme.dark ? '#A5B4FC' : '#3730A3' }]}
+                  style={[
+                    styles.groupName,
+                    { color: theme.text },
+                    isLeader && { color: theme.dark ? "#A5B4FC" : "#3730A3" },
+                  ]}
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
                   {group.name}
                 </Text>
               </View>
-              <Text style={[styles.groupDesc, { color: theme.textSecondary }]} numberOfLines={2} ellipsizeMode="tail">{group.desc}</Text>
+              <Text
+                style={[styles.groupDesc, { color: theme.textSecondary }]}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
+                {group.desc}
+              </Text>
 
               <View style={styles.badgeContainer}>
                 {pendingTasks.length > 0 ? (
                   <View style={styles.pendingBadge}>
                     <Clock color="#D97706" size={12} />
                     <Text style={styles.pendingText}>
-                      {`${pendingTasks.length} ${t('pendingTasksBadge')}`}
+                      {`${pendingTasks.length} ${t("pendingTasksBadge")}`}
                     </Text>
                   </View>
                 ) : totalTasks === 0 ? (
                   <View style={styles.notStartedBadge}>
                     <Clock color="#6B7280" size={12} />
-                    <Text style={styles.notStartedText}>{t('workNotStarted')}</Text>
+                    <Text style={styles.notStartedText}>
+                      {t("workNotStarted")}
+                    </Text>
                   </View>
                 ) : (
                   <View style={styles.completedBadge}>
                     <CheckSquare color="#16A34A" size={12} />
-                    <Text style={styles.completedText}>{t('workUpToDate')}</Text>
+                    <Text style={styles.completedText}>
+                      {t("workUpToDate")}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -469,26 +518,47 @@ export default function GroupsScreen({ navigation, route }) {
           {showProgressBar && (
             <View style={styles.progressSection}>
               <View style={styles.progressHeader}>
-                <Text style={[styles.progressLabel, { color: theme.textSecondary }]} numberOfLines={1}>{t('workProgress')}</Text>
+                <Text
+                  style={[styles.progressLabel, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {t("workProgress")}
+                </Text>
                 <View style={styles.progressHeaderRight}>
                   {riskLevel > 0 && (
-                    <View style={[
-                      styles.riskBadge,
-                      riskLevel === 4
-                        ? { backgroundColor: riskPal.bar, borderColor: riskPal.bar }
-                        : {
-                            backgroundColor: theme.dark ? riskPal.darkBg  : riskPal.lightBg,
-                            borderColor:     theme.dark ? riskPal.darkBorder : riskPal.lightBorder,
-                          },
-                    ]}>
+                    <View
+                      style={[
+                        styles.riskBadge,
+                        riskLevel === 4
+                          ? {
+                              backgroundColor: riskPal.bar,
+                              borderColor: riskPal.bar,
+                            }
+                          : {
+                              backgroundColor: theme.dark
+                                ? riskPal.darkBg
+                                : riskPal.lightBg,
+                              borderColor: theme.dark
+                                ? riskPal.darkBorder
+                                : riskPal.lightBorder,
+                            },
+                      ]}
+                    >
                       <AlertTriangle
-                        color={riskLevel === 4 ? '#FFF' : riskPal.bar}
+                        color={riskLevel === 4 ? "#FFF" : riskPal.bar}
                         size={13 + riskLevel}
                         strokeWidth={2.2}
                       />
                     </View>
                   )}
-                  <Text style={[styles.progressValue, { color: theme.text }, progressPercentage === 100 && { color: '#16A34A' }]} numberOfLines={1}>
+                  <Text
+                    style={[
+                      styles.progressValue,
+                      { color: theme.text },
+                      progressPercentage === 100 && { color: "#16A34A" },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {progressPercentage}% ({completedTasks}/{totalTasks})
                   </Text>
                 </View>
@@ -499,7 +569,8 @@ export default function GroupsScreen({ navigation, route }) {
                     styles.progressBarFill,
                     {
                       width: `${progressPercentage}%`,
-                      backgroundColor: progressPercentage === 100 ? '#16A34A' : '#4F46E5',
+                      backgroundColor:
+                        progressPercentage === 100 ? "#16A34A" : "#4F46E5",
                     },
                   ]}
                 />
@@ -517,23 +588,39 @@ export default function GroupsScreen({ navigation, route }) {
       <View
         style={[
           styles.header,
-          { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 16) },
+          {
+            backgroundColor: theme.headerBg,
+            paddingTop: headerPaddingTop(insets, 16),
+          },
         ]}
       >
         <View>
           <Text style={styles.headerTitle}>StudySync</Text>
-          <Text style={styles.headerSubtitle}>{t('workspaceSubtitle')}</Text>
+          <Text style={styles.headerSubtitle}>{t("workspaceSubtitle")}</Text>
         </View>
       </View>
 
       {/* Search + Filter */}
       <View style={[styles.searchContainer, { backgroundColor: theme.bg }]}>
         <View style={styles.searchRow}>
-          <View style={[styles.searchInputWrapper, { backgroundColor: theme.input, borderColor: theme.inputBorder, flex: 1 }]}>
-            <Search color={theme.textMuted} size={16} style={styles.searchIcon} />
+          <View
+            style={[
+              styles.searchInputWrapper,
+              {
+                backgroundColor: theme.input,
+                borderColor: theme.inputBorder,
+                flex: 1,
+              },
+            ]}
+          >
+            <Search
+              color={theme.textMuted}
+              size={16}
+              style={styles.searchIcon}
+            />
             <TextInput
               style={[styles.searchInput, { color: theme.text }]}
-              placeholder={t('searchGroup')}
+              placeholder={t("searchGroup")}
               placeholderTextColor={theme.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -544,24 +631,40 @@ export default function GroupsScreen({ navigation, route }) {
           <TouchableOpacity
             style={[
               styles.filterBtn,
-              { backgroundColor: statusFilter !== 'Todas' ? '#4F46E5' : theme.input, borderColor: statusFilter !== 'Todas' ? '#4F46E5' : theme.inputBorder },
+              {
+                backgroundColor:
+                  statusFilter !== "Todas" ? "#4F46E5" : theme.input,
+                borderColor:
+                  statusFilter !== "Todas" ? "#4F46E5" : theme.inputBorder,
+              },
             ]}
             onPress={() => setFilterOpen(true)}
             activeOpacity={0.75}
             accessibilityLabel="Filtrar grupos"
           >
-            <SlidersHorizontal color={statusFilter !== 'Todas' ? '#FFF' : theme.textMuted} size={18} />
+            <SlidersHorizontal
+              color={statusFilter !== "Todas" ? "#FFF" : theme.textMuted}
+              size={18}
+            />
           </TouchableOpacity>
         </View>
 
         {/* Chip activo cuando hay filtro */}
-        {statusFilter !== 'Todas' && (
+        {statusFilter !== "Todas" && (
           <View style={styles.activeFilterRow}>
-            <View style={[styles.activeChip, { backgroundColor: '#EEF2FF', borderColor: '#A5B4FC' }]}>
+            <View
+              style={[
+                styles.activeChip,
+                { backgroundColor: "#EEF2FF", borderColor: "#A5B4FC" },
+              ]}
+            >
               <Text style={styles.activeChipText}>
                 {STATUS_FILTERS.find((f) => f.key === statusFilter)?.label}
               </Text>
-              <TouchableOpacity onPress={() => setStatusFilter('Todas')} hitSlop={8}>
+              <TouchableOpacity
+                onPress={() => setStatusFilter("Todas")}
+                hitSlop={8}
+              >
                 <X color="#4F46E5" size={13} />
               </TouchableOpacity>
             </View>
@@ -577,19 +680,45 @@ export default function GroupsScreen({ navigation, route }) {
         statusBarTranslucent
         onRequestClose={() => setFilterOpen(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setFilterOpen(false)}>
-          <Pressable style={[styles.filterSheet, { backgroundColor: theme.card, paddingBottom: Math.max(16, insets.bottom) }]} onPress={() => {}}>
-            <Text style={[styles.filterSheetTitle, { color: theme.text }]}>{t('filterByGroupStatus')}</Text>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setFilterOpen(false)}
+        >
+          <Pressable
+            style={[
+              styles.filterSheet,
+              {
+                backgroundColor: theme.card,
+                paddingBottom: Math.max(16, insets.bottom),
+              },
+            ]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.filterSheetTitle, { color: theme.text }]}>
+              {t("filterByGroupStatus")}
+            </Text>
             {STATUS_FILTERS.map((f) => {
               const active = statusFilter === f.key;
               return (
                 <TouchableOpacity
                   key={f.key}
-                  style={[styles.filterOption, active && { backgroundColor: '#EEF2FF' }]}
-                  onPress={() => { setStatusFilter(f.key); setFilterOpen(false); }}
+                  style={[
+                    styles.filterOption,
+                    active && { backgroundColor: "#EEF2FF" },
+                  ]}
+                  onPress={() => {
+                    setStatusFilter(f.key);
+                    setFilterOpen(false);
+                  }}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.filterOptionText, { color: active ? '#4F46E5' : theme.text }, active && { fontWeight: '700' }]}>
+                  <Text
+                    style={[
+                      styles.filterOptionText,
+                      { color: active ? "#4F46E5" : theme.text },
+                      active && { fontWeight: "700" },
+                    ]}
+                  >
                     {f.label}
                   </Text>
                   {active && <Check color="#4F46E5" size={16} />}
@@ -605,125 +734,151 @@ export default function GroupsScreen({ navigation, route }) {
         <View style={styles.loadingCenter}>
           <ActivityIndicator color="#4F46E5" size="large" />
         </View>
-      ) : <FlatList
-        ref={flatListRef}
-        data={filteredGroups}
-        keyExtractor={(item) => item.id}
-        renderItem={renderGroupCard}
-        extraData={groupTasks}
-        contentContainerStyle={[
-          styles.listContainer,
-          {
-            flexGrow: 1,
-            paddingBottom: Math.max(
-              styles.listContainer.paddingBottom,
-              insets.bottom + 100,
-            ),
-          },
-        ]}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          invitations.length > 0 ? (
-            <View style={[
-                styles.invitationsSection,
-                isDark && { backgroundColor: 'rgba(79,70,229,0.15)', borderColor: '#4338CA' },
-              ]}>
-              <View style={styles.invitationsHeader}>
-                <Mail color="#4F46E5" size={16} />
-                <Text style={[styles.invitationsTitle, { color: theme.text }]}>
-                  {t('pendingInvitations')} ({invitations.length})
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={filteredGroups}
+          keyExtractor={(item) => item.id}
+          renderItem={renderGroupCard}
+          extraData={groupTasks}
+          contentContainerStyle={[
+            styles.listContainer,
+            {
+              flexGrow: 1,
+              paddingBottom: Math.max(
+                styles.listContainer.paddingBottom,
+                insets.bottom + 100,
+              ),
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            invitations.length > 0 ? (
+              <View
+                style={[
+                  styles.invitationsSection,
+                  isDark && {
+                    backgroundColor: "rgba(79,70,229,0.15)",
+                    borderColor: "#4338CA",
+                  },
+                ]}
+              >
+                <View style={styles.invitationsHeader}>
+                  <Mail color="#4F46E5" size={16} />
+                  <Text
+                    style={[styles.invitationsTitle, { color: theme.text }]}
+                  >
+                    {t("pendingInvitations")} ({invitations.length})
+                  </Text>
+                </View>
+                {invitations.map((inv) => (
+                  <View
+                    key={inv.id}
+                    style={[
+                      styles.invitationCard,
+                      {
+                        backgroundColor: theme.card,
+                        borderColor: theme.border,
+                      },
+                      highlightInvitationId === inv.id && {
+                        borderWidth: 2,
+                        borderColor: "#4F46E5",
+                        shadowColor: "#4F46E5",
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.35,
+                        shadowRadius: 6,
+                        elevation: 4,
+                      },
+                    ]}
+                  >
+                    <View style={styles.invitationContent}>
+                      <Text
+                        style={[
+                          styles.invitationGroupName,
+                          { color: theme.text },
+                        ]}
+                      >
+                        {inv.groupName}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.invitationText,
+                          { color: theme.textMuted },
+                        ]}
+                      >
+                        {t("invitationInviteLine", {
+                          who: inv.invitedByName || t("someoneInvited"),
+                        })}
+                      </Text>
+                    </View>
+                    <View style={styles.invitationActions}>
+                      <TouchableOpacity
+                        style={[
+                          styles.invitationBtn,
+                          styles.declineBtn,
+                          isDark && {
+                            backgroundColor: "rgba(220,38,38,0.18)",
+                            borderColor: "rgba(220,38,38,0.45)",
+                          },
+                        ]}
+                        onPress={() => handleDeclineInvitation(inv.id)}
+                        activeOpacity={0.7}
+                        accessible={true}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Rechazar invitación a ${inv.groupName}`}
+                        accessibilityHint="Doble toque para rechazar"
+                      >
+                        <X color="#DC2626" size={18} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.invitationBtn, styles.acceptBtn]}
+                        onPress={() => handleAcceptInvitation(inv)}
+                        activeOpacity={0.7}
+                        accessible={true}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Aceptar invitación a ${inv.groupName}`}
+                        accessibilityHint="Doble toque para aceptar y unirte al grupo"
+                      >
+                        <Check color="#FFFFFF" size={18} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null
+          }
+          ListEmptyComponent={
+            !loading && (
+              <View style={styles.emptyState}>
+                <Users color={theme.textMuted} size={52} />
+                <Text style={[styles.emptyTitle, { color: theme.text }]}>
+                  {searchQuery ? "Sin resultados" : "Sin grupos"}
+                </Text>
+                <Text style={[styles.emptyHint, { color: theme.textMuted }]}>
+                  {searchQuery
+                    ? `No se encontraron grupos para "${searchQuery}".`
+                    : "Crea un grupo de estudio o acepta una invitación para comenzar."}
                 </Text>
               </View>
-              {invitations.map((inv) => (
-                <View
-                  key={inv.id}
-                  style={[
-                    styles.invitationCard,
-                    { backgroundColor: theme.card, borderColor: theme.border },
-                    highlightInvitationId === inv.id && {
-                      borderWidth: 2,
-                      borderColor: '#4F46E5',
-                      shadowColor: '#4F46E5',
-                      shadowOffset: { width: 0, height: 0 },
-                      shadowOpacity: 0.35,
-                      shadowRadius: 6,
-                      elevation: 4,
-                    },
-                  ]}
-                >
-                  <View style={styles.invitationContent}>
-                    <Text style={[styles.invitationGroupName, { color: theme.text }]}>
-                      {inv.groupName}
-                    </Text>
-                    <Text style={[styles.invitationText, { color: theme.textMuted }]}>
-                      {t('invitationInviteLine', { who: inv.invitedByName || t('someoneInvited') })}
-                    </Text>
-                  </View>
-                  <View style={styles.invitationActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.invitationBtn,
-                        styles.declineBtn,
-                        isDark && { backgroundColor: 'rgba(220,38,38,0.18)', borderColor: 'rgba(220,38,38,0.45)' },
-                      ]}
-                      onPress={() => handleDeclineInvitation(inv.id)}
-                      activeOpacity={0.7}
-                      accessible={true}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Rechazar invitación a ${inv.groupName}`}
-                      accessibilityHint="Doble toque para rechazar"
-                    >
-                      <X color="#DC2626" size={18} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.invitationBtn, styles.acceptBtn]}
-                      onPress={() => handleAcceptInvitation(inv)}
-                      activeOpacity={0.7}
-                      accessible={true}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Aceptar invitación a ${inv.groupName}`}
-                      accessibilityHint="Doble toque para aceptar y unirte al grupo"
-                    >
-                      <Check color="#FFFFFF" size={18} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : null
-        }
-        ListEmptyComponent={
-          !loading && (
-            <View style={styles.emptyState}>
-              <Users color={theme.textMuted} size={52} />
-              <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                {searchQuery ? 'Sin resultados' : 'Sin grupos'}
-              </Text>
-              <Text style={[styles.emptyHint, { color: theme.textMuted }]}>
-                {searchQuery
-                  ? `No se encontraron grupos para "${searchQuery}".`
-                  : 'Crea un grupo de estudio o acepta una invitación para comenzar.'}
-              </Text>
-            </View>
-          )
-        }
-      />}
+            )
+          }
+        />
+      )}
 
       {/* FAB - Create Group */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => {
-          const isFree = (userProfile?.plan || 'free') === 'free';
+          const isFree = (userProfile?.plan || "free") === "free";
           // Solo grupos que tú creas (líder): unirte por invitación no cuenta para el límite de 3.
           const activeLedGroupsCount = groups.filter(
-            (g) =>
-              g.status !== 'Completada' && g.leaderId === user?.uid,
+            (g) => g.status !== "Completada" && g.leaderId === user?.uid,
           ).length;
           if (isFree && activeLedGroupsCount >= 3) {
             Alert.alert(
-              t('limitReachedTitle'),
-              t('freePlanMaxActiveGroupsMessage'),
-              [{ text: t('understood'), style: 'cancel' }],
+              t("limitReachedTitle"),
+              t("freePlanMaxActiveGroupsMessage"),
+              [{ text: t("understood"), style: "cancel" }],
             );
             return;
           }
@@ -749,8 +904,8 @@ const styles = StyleSheet.create({
   },
   loadingCenter: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   header: {
     backgroundColor: "#4F46E5",
@@ -875,7 +1030,7 @@ const styles = StyleSheet.create({
   // Cuando el usuario es líder del grupo — borde top con acento indigo
   groupCardLeader: {
     borderTopWidth: 2,
-    borderTopColor: '#4F46E5',
+    borderTopColor: "#4F46E5",
   },
   cardHeader: {
     flexDirection: "row",
@@ -1086,12 +1241,12 @@ const styles = StyleSheet.create({
   },
   // Columna derecha del card (solo avatar)
   cardRight: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   // Lado derecho del encabezado de progreso: icono de riesgo + porcentaje
   progressHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     flexShrink: 0,
   },
@@ -1101,12 +1256,18 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 9,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
-  emptyHint:  { fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    padding: 32,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: "700", textAlign: "center" },
+  emptyHint: { fontSize: 13, textAlign: "center", lineHeight: 20 },
   fab: {
     position: "absolute",
     bottom: 24,

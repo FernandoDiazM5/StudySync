@@ -53,9 +53,11 @@ export default function MessagesListScreen({ navigation }) {
     const applySort = () => {
       const sorted = [...groupsRef.current].sort((a, b) => {
         const ta = lastMsgsRef.current[a.id]?.createdAt
-          ? new Date(lastMsgsRef.current[a.id].createdAt).getTime() : 0;
+          ? new Date(lastMsgsRef.current[a.id].createdAt).getTime()
+          : 0;
         const tb = lastMsgsRef.current[b.id]?.createdAt
-          ? new Date(lastMsgsRef.current[b.id].createdAt).getTime() : 0;
+          ? new Date(lastMsgsRef.current[b.id].createdAt).getTime()
+          : 0;
         return tb - ta;
       });
       setSortedGroups(sorted);
@@ -81,10 +83,16 @@ export default function MessagesListScreen({ navigation }) {
       const currentIds = new Set(fetchedGroups.map((g) => g.id));
 
       Object.keys(msgUnsubs).forEach((id) => {
-        if (!currentIds.has(id)) { msgUnsubs[id](); delete msgUnsubs[id]; }
+        if (!currentIds.has(id)) {
+          msgUnsubs[id]();
+          delete msgUnsubs[id];
+        }
       });
       Object.keys(typingUnsubs).forEach((id) => {
-        if (!currentIds.has(id)) { typingUnsubs[id](); delete typingUnsubs[id]; }
+        if (!currentIds.has(id)) {
+          typingUnsubs[id]();
+          delete typingUnsubs[id];
+        }
       });
 
       fetchedGroups.forEach((g) => {
@@ -100,7 +108,8 @@ export default function MessagesListScreen({ navigation }) {
             setLastMessages((prev) => ({ ...prev, [g.id]: lastMsg }));
             setUnreadCounts((prev) => ({
               ...prev,
-              [g.id]: lastMsg?.readBy && !lastMsg.readBy.includes(user.uid) ? 1 : 0,
+              [g.id]:
+                lastMsg?.readBy && !lastMsg.readBy.includes(user.uid) ? 1 : 0,
             }));
 
             if (!initialDone.current) {
@@ -119,10 +128,14 @@ export default function MessagesListScreen({ navigation }) {
         }
 
         if (!typingUnsubs[g.id]) {
-          typingUnsubs[g.id] = firestoreService.onTypingStatus(g.id, user.uid, (ids) => {
-            if (cancelled) return;
-            setTypingGroups((prev) => ({ ...prev, [g.id]: ids }));
-          });
+          typingUnsubs[g.id] = firestoreService.onTypingStatus(
+            g.id,
+            user.uid,
+            (ids) => {
+              if (cancelled) return;
+              setTypingGroups((prev) => ({ ...prev, [g.id]: ids }));
+            },
+          );
         }
       });
     });
@@ -144,17 +157,25 @@ export default function MessagesListScreen({ navigation }) {
 
     return (
       <TouchableOpacity
-        style={[s.card, { backgroundColor: theme.card, borderColor: isUnread ? '#A5B4FC' : theme.border }, isUnread && s.cardUnread]}
+        style={[
+          s.card,
+          {
+            backgroundColor: theme.card,
+            borderColor: isUnread ? "#A5B4FC" : theme.border,
+          },
+          isUnread && s.cardUnread,
+        ]}
         onPress={() =>
           navigation.navigate("Chat", {
             groupId: group.id,
             groupName: group.name,
             groupPhotoURL: group.photoURL,
-          })}
+          })
+        }
         activeOpacity={0.7}
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`Chat: ${group.name}${isUnread ? ', mensaje sin leer' : ''}`}
+        accessibilityLabel={`Chat: ${group.name}${isUnread ? ", mensaje sin leer" : ""}`}
         accessibilityHint="Doble toque para abrir el chat"
       >
         <View style={s.row}>
@@ -164,29 +185,54 @@ export default function MessagesListScreen({ navigation }) {
               photoURL={group.photoURL}
               name={group.name}
               size={44}
-              style={isUnread ? { borderWidth: 2, borderColor: '#4F46E5' } : undefined}
+              style={
+                isUnread
+                  ? { borderWidth: 2, borderColor: "#4F46E5" }
+                  : undefined
+              }
             />
             {/* Abajo-derecha: arriba tapaba el ícono (birrete) en avatares sin foto */}
-            {isUnread && <View style={[s.unreadDot, { borderColor: theme.card }]} />}
+            {isUnread && (
+              <View style={[s.unreadDot, { borderColor: theme.card }]} />
+            )}
           </View>
           <View style={s.textSection}>
             <Text
-              style={[s.groupName, { color: theme.text }, isUnread && { fontWeight: '800' }]}
+              style={[
+                s.groupName,
+                { color: theme.text },
+                isUnread && { fontWeight: "800" },
+              ]}
               numberOfLines={1}
               ellipsizeMode="tail"
             >
               {group.name}
             </Text>
             <Text
-              style={[s.lastMsg, { color: isTyping ? '#4F46E5' : theme.textSecondary }, isUnread && !isTyping && { fontWeight: '600', color: theme.text }]}
+              style={[
+                s.lastMsg,
+                { color: isTyping ? "#4F46E5" : theme.textSecondary },
+                isUnread &&
+                  !isTyping && { fontWeight: "600", color: theme.text },
+              ]}
               numberOfLines={1}
             >
-              {isTyping ? 'escribiendo...' : (lastMsg ? lastMsg.text : t('noMessagesYet'))}
+              {isTyping
+                ? "escribiendo..."
+                : lastMsg
+                  ? lastMsg.text
+                  : t("noMessagesYet")}
             </Text>
           </View>
           <View style={s.rightSection}>
             {lastMsg && (
-              <Text style={[s.time, { color: isUnread ? '#4F46E5' : theme.textMuted }, isUnread && { fontWeight: '700' }]}>
+              <Text
+                style={[
+                  s.time,
+                  { color: isUnread ? "#4F46E5" : theme.textMuted },
+                  isUnread && { fontWeight: "700" },
+                ]}
+              >
                 {lastMsg.time || ""}
               </Text>
             )}
@@ -204,9 +250,15 @@ export default function MessagesListScreen({ navigation }) {
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
       <View
-        style={[s.header, { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 16) }]}
+        style={[
+          s.header,
+          {
+            backgroundColor: theme.headerBg,
+            paddingTop: headerPaddingTop(insets, 16),
+          },
+        ]}
       >
-        <Text style={s.headerTitle}>{t('messages')}</Text>
+        <Text style={s.headerTitle}>{t("messages")}</Text>
       </View>
 
       {!isReady ? (
@@ -221,12 +273,17 @@ export default function MessagesListScreen({ navigation }) {
           renderItem={renderGroupChat}
           extraData={{ lastMessages, typingGroups, unreadCounts }}
           removeClippedSubviews={false}
-          contentContainerStyle={[s.list, { flexGrow: 1, paddingBottom: insets.bottom + 16 }]}
+          contentContainerStyle={[
+            s.list,
+            { flexGrow: 1, paddingBottom: insets.bottom + 16 },
+          ]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={s.emptyState}>
               <MessageSquare color={theme.textMuted} size={52} />
-              <Text style={[s.emptyTitle, { color: theme.text }]}>Sin mensajes</Text>
+              <Text style={[s.emptyTitle, { color: theme.text }]}>
+                Sin mensajes
+              </Text>
               <Text style={[s.emptyHint, { color: theme.textMuted }]}>
                 Únete a un grupo de estudio y los chats aparecerán aquí.
               </Text>
@@ -288,7 +345,13 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   badgeText: { fontSize: 11, fontWeight: "700", color: "#FFF" },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
-  emptyHint:  { fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    padding: 32,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: "700", textAlign: "center" },
+  emptyHint: { fontSize: 13, textAlign: "center", lineHeight: 20 },
 });

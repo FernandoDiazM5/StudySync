@@ -29,25 +29,25 @@ export default function CreateGroupScreen({ navigation }) {
 
   const handleCreateGroup = async () => {
     if (!name.trim()) {
-      Alert.alert(t('error'), t('groupNameRequired'));
+      Alert.alert(t("error"), t("groupNameRequired"));
       return;
     }
     setLoading(true);
     try {
       await createGroup({
         name: name.trim(),
-        desc: desc.trim() || t('defaultGroupDesc'),
+        desc: desc.trim() || t("defaultGroupDesc"),
         leaderId: user.uid,
-        leaderName: userProfile?.name || user.displayName || 'Líder',
+        leaderName: userProfile?.name || user.displayName || "Líder",
         members: [user.uid],
-        leaderPlan: userProfile?.plan || 'free',
+        leaderPlan: userProfile?.plan || "free",
       });
-      Alert.alert(t('success'), t('groupCreatedSuccess'), [
+      Alert.alert(t("success"), t("groupCreatedSuccess"), [
         { text: "OK", onPress: () => navigation.goBack() },
       ]);
     } catch (e) {
       console.error("Error al crear grupo:", e);
-      Alert.alert(t('error'), e?.message || t('operationError'));
+      Alert.alert(t("error"), e?.message || t("operationError"));
     }
     setLoading(false);
   };
@@ -71,30 +71,41 @@ export default function CreateGroupScreen({ navigation }) {
         >
           <ChevronLeft color={theme.textSecondary} size={24} />
         </AppButton>
-        <Text style={[s.headerTitle, { color: theme.text }]}>{t('createNewGroup')}</Text>
+        <Text style={[s.headerTitle, { color: theme.text }]}>
+          {t("createNewGroup")}
+        </Text>
         <View style={{ width: 24 }} />
       </View>
 
       <View style={s.form}>
-        <View style={[s.iconWrap, { backgroundColor: theme.dark ? "#1e1b4b" : "#EEF2FF" }]}>
+        <View
+          style={[
+            s.iconWrap,
+            { backgroundColor: theme.dark ? "#1e1b4b" : "#EEF2FF" },
+          ]}
+        >
           <Users color="#4F46E5" size={32} />
         </View>
 
         <Text style={[s.subtitle, { color: theme.textSecondary }]}>
-          {t('groupDescription') || 'Crea un nuevo espacio de trabajo para tu materia o proyecto.'}
+          {t("groupDescription") ||
+            "Crea un nuevo espacio de trabajo para tu materia o proyecto."}
         </Text>
 
         <View>
           <Text style={[s.label, { color: theme.textSecondary }]}>
-            {t('groupName').toUpperCase()}
+            {t("groupName").toUpperCase()}
           </Text>
           <TextInput
-            style={[s.input, {
-              backgroundColor: theme.input,
-              borderColor: theme.inputBorder,
-              color: theme.text,
-            }]}
-            placeholder={t('exampleGroupName')}
+            style={[
+              s.input,
+              {
+                backgroundColor: theme.input,
+                borderColor: theme.inputBorder,
+                color: theme.text,
+              },
+            ]}
+            placeholder={t("exampleGroupName")}
             placeholderTextColor={theme.textMuted}
             value={name}
             onChangeText={setName}
@@ -105,15 +116,18 @@ export default function CreateGroupScreen({ navigation }) {
 
         <View>
           <Text style={[s.label, { color: theme.textSecondary }]}>
-            {t('groupDescription').toUpperCase()} (OPCIONAL)
+            {t("groupDescription").toUpperCase()} (OPCIONAL)
           </Text>
           <TextInput
-            style={[s.input, {
-              backgroundColor: theme.input,
-              borderColor: theme.inputBorder,
-              color: theme.text,
-            }]}
-            placeholder={t('exampleGroupDesc')}
+            style={[
+              s.input,
+              {
+                backgroundColor: theme.input,
+                borderColor: theme.inputBorder,
+                color: theme.text,
+              },
+            ]}
+            placeholder={t("exampleGroupDesc")}
             placeholderTextColor={theme.textMuted}
             value={desc}
             onChangeText={setDesc}
@@ -133,7 +147,7 @@ export default function CreateGroupScreen({ navigation }) {
           {loading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={s.btnText}>{t('createGroup')}</Text>
+            <Text style={s.btnText}>{t("createGroup")}</Text>
           )}
         </AppButton>
       </View>

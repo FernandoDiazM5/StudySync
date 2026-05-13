@@ -55,7 +55,8 @@ import {
 // Formatea el número al estilo "XXX XXX XXX" (máx. 9 dígitos)
 const fmtPhone = (v) => {
   const d = (v || "").replace(/\D/g, "").substring(0, 9);
-  if (d.length > 6) return `${d.substring(0, 3)} ${d.substring(3, 6)} ${d.substring(6)}`;
+  if (d.length > 6)
+    return `${d.substring(0, 3)} ${d.substring(3, 6)} ${d.substring(6)}`;
   if (d.length > 3) return `${d.substring(0, 3)} ${d.substring(3)}`;
   return d;
 };
@@ -112,7 +113,10 @@ export default function ProfileScreen() {
   const displayRole = useMemo(() => {
     const r = (userProfile?.role || "").trim();
     if (!r) return t("member");
-    const lower = r.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const lower = r
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
     if (lower === "miembro" || lower === "member") return t("member");
     if (lower === "lider" || lower === "leader") return t("leader");
     return r;
@@ -253,7 +257,10 @@ export default function ProfileScreen() {
         <View
           style={[
             s.subHeader,
-            { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 16) },
+            {
+              backgroundColor: theme.headerBg,
+              paddingTop: headerPaddingTop(insets, 16),
+            },
           ]}
         >
           <AppButton
@@ -368,7 +375,10 @@ export default function ProfileScreen() {
         <View
           style={[
             s.subHeader,
-            { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 16) },
+            {
+              backgroundColor: theme.headerBg,
+              paddingTop: headerPaddingTop(insets, 16),
+            },
           ]}
         >
           <AppButton
