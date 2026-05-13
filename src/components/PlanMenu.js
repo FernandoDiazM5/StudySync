@@ -382,9 +382,9 @@ function PlanMenu({
   // montado cuando la animación useNativeDriver:true empiece.
   if (!mounted && !visible) return null;
 
-  /** Cabecera del panel bajo notch/status; el contenedor va de borde a borde vertical. */
+  /** Cabecera: el panel ya empieza bajo la status bar (`top: insets.top`), solo aire interno. */
   const headerSafePadding = {
-    paddingTop: insets.top + 12,
+    paddingTop: 12,
     paddingBottom: 14,
   };
   /** Padding del contenido del ScrollView (últimas líneas / botones). */
@@ -776,6 +776,7 @@ function PlanMenu({
             width: panelWidth,
             maxWidth: panelWidth,
             backgroundColor: theme.bg,
+            top: insets.top,
             transform: [{ translateX: slideAnim }],
           },
         ]}
@@ -1463,7 +1464,6 @@ const styles = StyleSheet.create({
   container: {
     position: "absolute",
     right: 0,
-    top: 0,
     bottom: 0,
     minWidth: 0,
     borderTopLeftRadius: 16,

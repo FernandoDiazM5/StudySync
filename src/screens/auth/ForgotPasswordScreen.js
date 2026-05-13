@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  StatusBar,
 } from "react-native";
 import LogoApp from "../../../assets/logo_app.svg";
 
@@ -69,7 +68,6 @@ export default function ForgotPasswordScreen({ navigation }) {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <StatusBar barStyle="dark-content" backgroundColor="#EEF2FF" />
       <View style={styles.card}>
         {/* Logo */}
         <LogoApp width={100} height={100} style={styles.logoImage} />

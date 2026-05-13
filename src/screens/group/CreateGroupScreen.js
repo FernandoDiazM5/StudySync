@@ -7,12 +7,13 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  StatusBar,
 } from "react-native";
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { headerPaddingTop } from "../../utils/headerInsets";
 import { ChevronLeft, Users } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { createGroup } from "../../services/firestoreService";
@@ -21,6 +22,7 @@ export default function CreateGroupScreen({ navigation }) {
   const { user, userProfile } = useAuth();
   const { t } = useAccessibility();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,11 +54,16 @@ export default function CreateGroupScreen({ navigation }) {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar
-        barStyle={theme.dark ? "light-content" : "dark-content"}
-        backgroundColor={theme.card}
-      />
-      <View style={[s.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+      <View
+        style={[
+          s.header,
+          {
+            backgroundColor: theme.card,
+            borderBottomColor: theme.border,
+            paddingTop: headerPaddingTop(insets, 16),
+          },
+        ]}
+      >
         <AppButton
           onPress={() => navigation.goBack()}
           accessibilityLabel="Volver"
@@ -138,8 +145,7 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 48,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     flexDirection: "row",
     alignItems: "center",

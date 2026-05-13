@@ -295,7 +295,7 @@ export default function AccessibilityMenu() {
           styles.container,
           {
             backgroundColor: theme.bg,
-            top: 0,
+            top: insets.top,
             bottom: 0,
             transform: [{ translateX: slideAnim }],
           },
@@ -309,7 +309,7 @@ export default function AccessibilityMenu() {
             styles.header,
             {
               backgroundColor: theme.headerBg,
-              paddingTop: insets.top + 12,
+              paddingTop: 12,
               paddingBottom: 14,
             },
           ]}

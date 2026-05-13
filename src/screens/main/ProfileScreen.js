@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  StatusBar,
   Image,
   ActivityIndicator,
   TouchableOpacity,
@@ -17,6 +16,7 @@ import {
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { headerPaddingTop } from "../../utils/headerInsets";
 import {
   User,
   ChevronLeft,
@@ -250,8 +250,12 @@ export default function ProfileScreen() {
         style={[s.container, { backgroundColor: theme.bg }]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
-        <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
+        <View
+          style={[
+            s.subHeader,
+            { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 16) },
+          ]}
+        >
           <AppButton
             onPress={() => setSubView("main")}
             accessibilityLabel="Volver"
@@ -361,8 +365,12 @@ export default function ProfileScreen() {
   if (subView === "password") {
     return (
       <View style={[s.container, { backgroundColor: theme.bg }]}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
-        <View style={[s.subHeader, { backgroundColor: theme.headerBg }]}>
+        <View
+          style={[
+            s.subHeader,
+            { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 16) },
+          ]}
+        >
           <AppButton
             onPress={() => setSubView("main")}
             accessibilityLabel="Volver"
@@ -530,7 +538,6 @@ export default function ProfileScreen() {
   // === MAIN PROFILE VIEW ===
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
       <ScrollView
         style={s.profileScroll}
         contentContainerStyle={{
@@ -871,8 +878,7 @@ const s = StyleSheet.create({
   subHeader: {
     backgroundColor: "#4F46E5",
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 48,
+    paddingBottom: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,

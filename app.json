@@ -5,34 +5,67 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "backgroundColor": "#F9FAFB",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F9FAFB"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "backgroundColor": "#F9FAFB",
       "package": "com.studysync.app",
       "googleServicesFile": "./src/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
+      "splash": {
+        "image": "./assets/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#F9FAFB"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["@react-native-community/datetimepicker"],
+    "androidNavigationBar": {
+      "backgroundColor": "#FFFFFF",
+      "barStyle": "dark-content"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-system-ui",
+      [
+        "expo-navigation-bar",
+        {
+          "backgroundColor": "#FFFFFF",
+          "barStyle": "dark",
+          "visibility": "visible",
+          "position": "relative"
+        }
+      ]
+    ],
     "extra": {
+      "brevoApiKey": "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",
+      "brevoSenderEmail": "studysync.soporte@outlook.com",
+      "brevoSenderName": "StudySync",
+      "expo-navigation-bar": {
+        "backgroundColor": "#FFFFFF",
+        "barStyle": "dark",
+        "visibility": "visible",
+        "position": "relative"
+      },
       "eas": {
-        "projectId": "c32b61d5-be48-46d6-80ff-2f4af0a9e82a"
+        "projectId": "718987b0-c2e4-4b97-a90e-c4a03206921f"
       }
-    }
+    },
+    "owner": "bhhryan25"
   }
 }

@@ -21,7 +21,6 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
-  StatusBar,
   Modal,
   Alert,
   Vibration,
@@ -30,6 +29,7 @@ import Text from "../../components/AppText";
 import GroupAvatar from "../../components/GroupAvatar";
 import { initialsFromDisplayName } from "../../utils/avatarInitials";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { headerPaddingTop } from "../../utils/headerInsets";
 import {
   ChevronLeft,
   Send,
@@ -1347,11 +1347,12 @@ export default function ChatScreen({ route, navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
-
       {/* Header */}
       <View
-        style={[styles.header, { backgroundColor: theme.headerBg }]}
+        style={[
+          styles.header,
+          { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 12) },
+        ]}
         onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
       >
         <View style={styles.headerLeft}>
@@ -2417,8 +2418,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: "#4F46E5",
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: 48,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

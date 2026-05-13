@@ -1,7 +1,7 @@
 // BOTTOM TAB NAVIGATOR - StudySync (Migración de BottomNavBar L397-411)
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Users, MessageSquare, User, ClipboardList, Bell } from 'lucide-react-native';
 import GroupsScreen from '../screens/main/GroupsScreen';
 import MessagesListScreen from '../screens/main/MessagesListScreen';
@@ -15,11 +15,53 @@ import { getMyInvitations, getMyAssignedTasks, getMyNotifications, getMyGroups, 
 
 const Tab = createBottomTabNavigator();
 
+/** El `Label` por defecto usa 1 línea → textos largos se cortan con 5 tabs; 2 líneas en Android. */
+function androidTabBarLabel(text) {
+  return function AndroidTabBarLabel({ color }) {
+    return (
+      <Text
+        numberOfLines={2}
+        ellipsizeMode="tail"
+        style={{
+          color,
+          fontSize: 10,
+          fontWeight: '600',
+          textAlign: 'center',
+          lineHeight: 12,
+          marginTop: 2,
+          paddingHorizontal: 1,
+        }}
+      >
+        {text}
+      </Text>
+    );
+  };
+}
+
 export default function BottomTabNavigator() {
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { theme } = useTheme();
   const { t } = useAccessibility();
+
+  const tabBarStyle = useMemo(
+    () => ({
+      backgroundColor: theme.tabBg,
+      borderTopWidth: 1,
+      borderTopColor: theme.tabBorder,
+      ...(Platform.OS === 'android'
+        ? {
+            // Sin `height` fijo: la tab bar suma el inset inferior al alto por defecto
+            // (coherente con edge-to-edge). Evita franja entre pestañas y barra del sistema.
+            paddingTop: 2,
+            elevation: 0,
+            shadowOpacity: 0,
+            shadowOffset: { width: 0, height: 0 },
+            shadowRadius: 0,
+          }
+        : { paddingTop: 8 }),
+    }),
+    [theme.tabBg, theme.tabBorder],
+  );
   const [invitationCount, setInvitationCount] = useState(0);
   const [pendingTaskCount, setPendingTaskCount] = useState(0);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
@@ -125,28 +167,27 @@ export default function BottomTabNavigator() {
       backBehavior="history"
       screenOptions={{
         headerShown: false,
+        sceneStyle: { flex: 1, backgroundColor: theme.bg },
         tabBarActiveTintColor: '#4F46E5',
         tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          backgroundColor: theme.tabBg,
-          borderTopWidth: 1,
-          borderTopColor: theme.tabBorder,
-          paddingBottom: Math.max(insets.bottom, 8),
-          paddingTop: 8,
-          height: 60 + insets.bottom,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
+        tabBarStyle,
+        tabBarLabelStyle:
+          Platform.OS === 'android'
+            ? undefined
+            : {
+                fontSize: 11,
+                fontWeight: '600',
+              },
       }}
     >
       <Tab.Screen
         name="Grupos"
         component={GroupsScreen}
         options={{
-          tabBarLabel: t('groups'),
-          tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
+          tabBarLabel: Platform.OS === 'android' ? androidTabBarLabel(t('groups')) : t('groups'),
+          tabBarIcon: ({ color, size }) => (
+            <Users color={color} size={Platform.OS === 'android' ? Math.round(size * 0.92) : size} />
+          ),
           tabBarBadge: invitationCount > 0 ? invitationCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: '#DC2626',
@@ -163,8 +204,10 @@ export default function BottomTabNavigator() {
         name="Mensajes"
         component={MessagesListScreen}
         options={{
-          tabBarLabel: t('messages'),
-          tabBarIcon: ({ color, size }) => <MessageSquare color={color} size={size} />,
+          tabBarLabel: Platform.OS === 'android' ? androidTabBarLabel(t('messages')) : t('messages'),
+          tabBarIcon: ({ color, size }) => (
+            <MessageSquare color={color} size={Platform.OS === 'android' ? Math.round(size * 0.92) : size} />
+          ),
           tabBarBadge: unreadMsgCount > 0 ? unreadMsgCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: '#DC2626',
@@ -181,8 +224,10 @@ export default function BottomTabNavigator() {
         name="Tareas"
         component={TaskInboxScreen}
         options={{
-          tabBarLabel: t('tasks'),
-          tabBarIcon: ({ color, size }) => <ClipboardList color={color} size={size} />,
+          tabBarLabel: Platform.OS === 'android' ? androidTabBarLabel(t('tasks')) : t('tasks'),
+          tabBarIcon: ({ color, size }) => (
+            <ClipboardList color={color} size={Platform.OS === 'android' ? Math.round(size * 0.92) : size} />
+          ),
           tabBarBadge: pendingTaskCount > 0 ? pendingTaskCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: '#DC2626',
@@ -199,8 +244,11 @@ export default function BottomTabNavigator() {
         name="Notificaciones"
         component={NotificationsScreen}
         options={{
-          tabBarLabel: t('notifications'),
-          tabBarIcon: ({ color, size }) => <Bell color={color} size={size} />,
+          tabBarLabel:
+            Platform.OS === 'android' ? androidTabBarLabel(t('notifications')) : t('notifications'),
+          tabBarIcon: ({ color, size }) => (
+            <Bell color={color} size={Platform.OS === 'android' ? Math.round(size * 0.92) : size} />
+          ),
           tabBarBadge: unreadNotifCount > 0 ? unreadNotifCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: '#DC2626',
@@ -217,8 +265,10 @@ export default function BottomTabNavigator() {
         name="Perfil"
         component={ProfileScreen}
         options={{
-          tabBarLabel: t('profile'),
-          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+          tabBarLabel: Platform.OS === 'android' ? androidTabBarLabel(t('profile')) : t('profile'),
+          tabBarIcon: ({ color, size }) => (
+            <User color={color} size={Platform.OS === 'android' ? Math.round(size * 0.92) : size} />
+          ),
           tabBarAccessibilityLabel: t('profile'),
         }}
       />

@@ -20,7 +20,6 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  StatusBar,
   Modal,
   Linking,
   Image,
@@ -32,6 +31,7 @@ import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { headerPaddingTop } from "../../utils/headerInsets";
 import {
   ChevronLeft,
   MessageSquare,
@@ -1677,16 +1677,15 @@ export default function GroupDetailsScreen({ route, navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <StatusBar
-        barStyle={theme.dark ? "light-content" : "dark-content"}
-        backgroundColor={theme.card}
-      />
-
       {/* Header */}
       <View
         style={[
           styles.header,
-          { backgroundColor: theme.card, borderBottomColor: theme.border },
+          {
+            backgroundColor: theme.card,
+            borderBottomColor: theme.border,
+            paddingTop: headerPaddingTop(insets, 16),
+          },
         ]}
       >
         <TouchableOpacity
@@ -2613,8 +2612,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 48,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
     flexDirection: "row",

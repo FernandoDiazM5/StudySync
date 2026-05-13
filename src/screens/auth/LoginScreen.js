@@ -14,7 +14,6 @@ import {
   Keyboard,
   ActivityIndicator,
   Alert,
-  StatusBar,
   Animated,
 } from "react-native";
 
@@ -128,7 +127,6 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#EEF2FF" />
       <ScrollView
           ref={scrollRef}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(24, kbPad) }]}

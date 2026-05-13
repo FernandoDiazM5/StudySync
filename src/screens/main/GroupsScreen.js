@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  StatusBar,
   Alert,
   Modal,
   Pressable,
@@ -24,6 +23,7 @@ import GroupAvatar from "../../components/GroupAvatar";
 import SwipeableRow from "../../components/SwipeableRow";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { headerPaddingTop } from "../../utils/headerInsets";
 import {
   Search,
   Plus,
@@ -513,10 +513,13 @@ export default function GroupsScreen({ navigation, route }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
-
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.headerBg }]}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 16) },
+        ]}
+      >
         <View>
           <Text style={styles.headerTitle}>StudySync</Text>
           <Text style={styles.headerSubtitle}>{t('workspaceSubtitle')}</Text>
@@ -752,8 +755,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: "#4F46E5",
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 48,
+    paddingBottom: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",

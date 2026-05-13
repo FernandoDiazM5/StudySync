@@ -6,13 +6,13 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
 } from "react-native";
 import Text from "../../components/AppText";
 import GroupAvatar from "../../components/GroupAvatar";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { headerPaddingTop } from "../../utils/headerInsets";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import * as firestoreService from "../../services/firestoreService";
@@ -203,8 +203,9 @@ export default function MessagesListScreen({ navigation }) {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.headerBg} />
-      <View style={[s.header, { backgroundColor: theme.headerBg }]}>
+      <View
+        style={[s.header, { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 16) }]}
+      >
         <Text style={s.headerTitle}>{t('messages')}</Text>
       </View>
 
@@ -242,8 +243,7 @@ const s = StyleSheet.create({
   header: {
     backgroundColor: "#4F46E5",
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 48,
+    paddingBottom: 16,
     alignItems: "center",
   },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#FFF" },

@@ -4,13 +4,13 @@ import {
   View,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
   SectionList,
   ScrollView,
 } from "react-native";
 import Text from "../../components/AppText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { headerPaddingTop } from "../../utils/headerInsets";
 import {
   Bell,
   Mail,
@@ -369,15 +369,13 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#4F46E5" />
-
       {/* Header */}
       <View
         style={[
           s.header,
           {
             backgroundColor: theme.dark ? "#312E81" : "#4F46E5",
-            paddingTop: insets.top + 12,
+            paddingTop: headerPaddingTop(insets, 12),
           },
         ]}
       >

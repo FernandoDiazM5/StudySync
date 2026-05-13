@@ -8,7 +8,6 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  StatusBar,
   Platform,
 } from "react-native";
 import Text from "../../components/AppText";
@@ -16,6 +15,7 @@ import AppButton from "../../components/AppButton";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { headerPaddingTop } from "../../utils/headerInsets";
 import { ChevronLeft, Check, Calendar, Clock, X } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -138,14 +138,14 @@ export default function CreateTaskScreen({ route, navigation }) {
 
   return (
     <View style={[s.container, { backgroundColor: theme.bg }]}>
-      <StatusBar
-        barStyle={theme.dark ? "light-content" : "dark-content"}
-        backgroundColor={theme.card}
-      />
       <View
         style={[
           s.header,
-          { backgroundColor: theme.card, borderBottomColor: theme.border },
+          {
+            backgroundColor: theme.card,
+            borderBottomColor: theme.border,
+            paddingTop: headerPaddingTop(insets, 16),
+          },
         ]}
       >
         <AppButton
@@ -463,8 +463,7 @@ const s = StyleSheet.create({
   header: {
     backgroundColor:    "#FFF",
     paddingHorizontal:  16,
-    paddingVertical:    16,
-    paddingTop:         48,
+    paddingBottom:      16,
     borderBottomWidth:  1,
     borderBottomColor:  "#E5E7EB",
     flexDirection:      "row",

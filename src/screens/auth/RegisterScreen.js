@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  StatusBar,
 } from 'react-native';
 import LogoApp from '../../../assets/logo_app.svg';
 import Text from '../../components/AppText';
@@ -124,7 +123,6 @@ export default function RegisterScreen({ navigation }) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="dark-content" backgroundColor="#EEF2FF" />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
