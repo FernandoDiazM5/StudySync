@@ -24,6 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+<<<<<<< HEAD
       "edgeToEdgeEnabled": true,
       "softwareKeyboardLayoutMode": "resize",
       "splash": {
@@ -31,6 +32,11 @@
         "resizeMode": "contain",
         "backgroundColor": "#F9FAFB"
       }
+=======
+      "edgeToEdgeEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "navigationBarColor": "#FFFFFF"
+>>>>>>> 9b5ee8d4823405d5f2591110f66fa52d5068a647
     },
     "web": {
       "favicon": "./assets/favicon.png"
