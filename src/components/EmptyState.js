@@ -8,6 +8,7 @@ import { View, StyleSheet } from "react-native";
 import AppButton from "./AppButton";
 import Text from "./AppText";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAccessibility } from "../contexts/AccessibilityContext";
 
 export default function EmptyState({
   icon: Icon,
@@ -17,6 +18,7 @@ export default function EmptyState({
   onAction,
 }) {
   const { theme } = useTheme();
+  const { t } = useAccessibility();
   return (
     <View
       style={[
@@ -37,7 +39,7 @@ export default function EmptyState({
           onPress={onAction}
           activeOpacity={0.7}
           accessibilityLabel={actionText}
-          accessibilityHint="Doble toque para realizar esta acción"
+          accessibilityHint={t("doubleTapAction")}
         >
           <Text style={styles.actionText}>{actionText}</Text>
         </AppButton>

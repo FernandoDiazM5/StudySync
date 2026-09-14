@@ -1,26 +1,36 @@
 // ============================================
 // AUTH CONTEXT - StudySync
 // Provee usuario actual y funciones de auth a toda la app
-// Reemplaza el estado currentUser del componente principal
 // ============================================
 
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import { AppState } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { onAuthChange, getUserProfile, signOut } from '../services/authService';
-import { registerForPushNotifications } from '../services/notificationService';
-import { auth } from '../services/firebaseConfig';
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+} from "react";
+import { AppState } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { onAuthChange, getUserProfile, signOut } from "../services/authService";
+import { registerForPushNotifications } from "../services/notificationService";
+import { auth } from "../services/firebaseConfig";
+import {
+  waitForSignInGate,
+  isPending2faFor,
+  clearPending2faMark,
+  markPending2fa,
+} from "../services/login2faGate";
 
 const AuthContext = createContext(null);
 
 /** Marca de tiempo al pasar la app a segundo plano (ms desde epoch). */
-const BG_SESSION_AT_KEY = '@studysync_session_background_at';
+const BG_SESSION_AT_KEY = "@studysync_session_background_at";
 
 /**
  * Tiempo máximo en segundo plano con la sesión conservada.
  * Pasado este intervalo desde la última vez que la app quedó en background,
  * al volver a primer plano (o al arrancar con sesión restaurada) se cierra sesión.
- * Ajusta aquí el límite (p. ej. 3 días: 3 * 24 * 60 * 60 * 1000).
  */
 const BACKGROUND_SESSION_MAX_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -45,12 +55,13 @@ async function isBackgroundSessionExpired() {
 }
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);          // Firebase Auth user
-  const [userProfile, setUserProfile] = useState(null); // Firestore user data
-  const [loading, setLoading] = useState(true);     // Loading state inicial
+  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  /** true mientras el login espera OTP de 2FA (no abrir MainStack). */
+  const [pending2fa, setPending2fa] = useState(false);
 
   useEffect(() => {
-    // Escuchar cambios de autenticación
     const unsubscribe = onAuthChange(async (firebaseUser) => {
       if (firebaseUser) {
         if (await isBackgroundSessionExpired()) {
@@ -60,16 +71,25 @@ export const AuthProvider = ({ children }) => {
           return;
         }
 
+        // Esperar a que signIn termine de marcar pending 2FA si aplica.
+        await waitForSignInGate();
+
+        const needs2fa = isPending2faFor(firebaseUser.uid);
+        setPending2fa(needs2fa);
         setUser(firebaseUser);
-        // Perfil: Firestore + fallback Auth (nombre/email) y doc users si faltaba
+
         const result = await getUserProfile(firebaseUser.uid, firebaseUser);
         if (result.success) {
           setUserProfile(result.data);
         }
-        // Registrar token de notificaciones push
-        registerForPushNotifications(firebaseUser.uid).catch(() => {});
+
+        if (!needs2fa) {
+          registerForPushNotifications(firebaseUser.uid).catch(() => {});
+        }
       } else {
         await clearBackgroundSessionMarker();
+        clearPending2faMark();
+        setPending2fa(false);
         setUser(null);
         setUserProfile(null);
       }
@@ -79,10 +99,9 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  // Marca al ir a segundo plano; al volver, cierra sesión si superó el límite.
   useEffect(() => {
-    const sub = AppState.addEventListener('change', async (state) => {
-      if (state === 'background') {
+    const sub = AppState.addEventListener("change", async (state) => {
+      if (state === "background") {
         try {
           if (auth.currentUser) {
             await AsyncStorage.setItem(BG_SESSION_AT_KEY, String(Date.now()));
@@ -92,7 +111,7 @@ export const AuthProvider = ({ children }) => {
         }
         return;
       }
-      if (state !== 'active') return;
+      if (state !== "active") return;
 
       try {
         const raw = await AsyncStorage.getItem(BG_SESSION_AT_KEY);
@@ -114,9 +133,6 @@ export const AuthProvider = ({ children }) => {
     return () => sub.remove();
   }, []);
 
-  /**
-   * Actualizar el perfil local después de editar
-   */
   const refreshProfile = async () => {
     if (!user) return;
     const result = await getUserProfile(user.uid, user);
@@ -125,25 +141,51 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const completePending2fa = useCallback(async () => {
+    clearPending2faMark();
+    setPending2fa(false);
+    if (user?.uid) {
+      registerForPushNotifications(user.uid).catch(() => {});
+      const result = await getUserProfile(user.uid, user);
+      if (result.success) setUserProfile(result.data);
+    }
+  }, [user]);
+
+  const cancelPending2fa = useCallback(async () => {
+    clearPending2faMark();
+    setPending2fa(false);
+    await signOut();
+  }, []);
+
+  /** Por si el OTP screen necesita reafirmar el gate (p. ej. tras remount). */
+  const ensurePending2fa = useCallback((uid) => {
+    if (!uid) return;
+    markPending2fa(uid);
+    setPending2fa(true);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{
-      user,           // Firebase Auth user (uid, email, etc.)
-      userProfile,    // Firestore profile data (name, phone, role, etc.)
-      loading,        // true mientras se verifica la sesión
-      refreshProfile  // función para refrescar datos del perfil
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        userProfile,
+        loading,
+        pending2fa,
+        refreshProfile,
+        completePending2fa,
+        cancelPending2fa,
+        ensurePending2fa,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-/**
- * Hook para acceder al contexto de autenticación
- */
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

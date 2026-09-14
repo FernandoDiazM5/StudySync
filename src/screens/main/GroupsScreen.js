@@ -23,10 +23,12 @@ import {
   ActivityIndicator,
   InteractionManager,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import Text from "../../components/AppText";
 import GroupAvatar from "../../components/GroupAvatar";
 import SwipeableRow from "../../components/SwipeableRow";
+import { resolveGroupColor } from "../../utils/groupColors";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { headerPaddingTop } from "../../utils/headerInsets";
@@ -44,7 +46,8 @@ import {
   LogOut,
   Users,
   AlertTriangle,
-  Crown,
+  ShieldCheck,
+  ChevronsLeft,
 } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -56,6 +59,8 @@ import {
   sortGroupsForUser,
 } from "../../services/firestoreService";
 import * as firestoreService from "../../services/firestoreService";
+
+const GROUPS_SWIPE_HINT_KEY = "studysync_groups_swipe_hint_dismissed";
 
 // ── Paleta del indicador de riesgo — familia indigo/violet de la app ─────────
 // L1 suave → L4 violeta, coherente con #4F46E5 / #6366F1 / #7C3AED
@@ -151,6 +156,7 @@ export default function GroupsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("Todas");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
 
   const flatListRef = useRef(null);
   const [highlightInvitationId, setHighlightInvitationId] = useState(null);
@@ -163,6 +169,32 @@ export default function GroupsScreen({ navigation, route }) {
       openRowCloseRef.current();
     }
     openRowCloseRef.current = closeFn;
+    // Si ya descubrió el gesto, no hace falta seguir mostrando el tip.
+    setShowSwipeHint((prev) => {
+      if (prev) {
+        AsyncStorage.setItem(GROUPS_SWIPE_HINT_KEY, "1").catch(() => {});
+      }
+      return false;
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(GROUPS_SWIPE_HINT_KEY)
+      .then((v) => {
+        if (!cancelled && v !== "1") setShowSwipeHint(true);
+      })
+      .catch(() => {
+        if (!cancelled) setShowSwipeHint(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dismissSwipeHint = useCallback(() => {
+    setShowSwipeHint(false);
+    AsyncStorage.setItem(GROUPS_SWIPE_HINT_KEY, "1").catch(() => {});
   }, []);
 
   // Al abrir la pestaña desde una notificación de invitación: subir la lista y resaltar la fila.
@@ -243,7 +275,7 @@ export default function GroupsScreen({ navigation, route }) {
       }
     } catch (e) {
       console.error("[handleAcceptInvitation]", e);
-      Alert.alert("Error", e.message || "No se pudo aceptar la invitación");
+      Alert.alert(t("error"), e.message || t("acceptInviteFailed"));
     }
   };
 
@@ -251,7 +283,7 @@ export default function GroupsScreen({ navigation, route }) {
     try {
       await declineInvitation(invitationId);
     } catch (e) {
-      Alert.alert("Error", "No se pudo rechazar la invitación");
+      Alert.alert(t("error"), t("rejectInviteFailed"));
     }
   };
 
@@ -348,18 +380,18 @@ export default function GroupsScreen({ navigation, route }) {
 
   const handleDeleteGroup = (group) => {
     Alert.alert(
-      t("confirm") || "Confirmar",
-      `¿Estás seguro de que deseas eliminar el grupo "${group.name}"? Se borrarán todos los mensajes, tareas y archivos.`,
+      t("confirm"),
+      t("deleteGroupConfirmNamed", { name: group.name }),
       [
-        { text: t("cancel") || "Cancelar", style: "cancel" },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: t("delete") || "Eliminar",
+          text: t("delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await firestoreService.deleteGroup(group.id);
             } catch (e) {
-              Alert.alert("Error", "No se pudo eliminar el grupo");
+              Alert.alert(t("error"), t("deleteGroupFailed"));
             }
           },
         },
@@ -369,18 +401,18 @@ export default function GroupsScreen({ navigation, route }) {
 
   const handleLeaveGroup = (group) => {
     Alert.alert(
-      t("confirm") || "Confirmar",
-      `¿Deseas salir del grupo "${group.name}"?`,
+      t("confirm"),
+      t("leaveGroupConfirmNamed", { name: group.name }),
       [
-        { text: t("cancel") || "Cancelar", style: "cancel" },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: "Salir",
+          text: t("leave"),
           style: "destructive",
           onPress: async () => {
             try {
               await firestoreService.leaveGroup(group.id, user.uid);
             } catch (e) {
-              Alert.alert("Error", "No se pudo salir del grupo");
+              Alert.alert(t("error"), t("leaveGroupFailed"));
             }
           },
         },
@@ -403,6 +435,7 @@ export default function GroupsScreen({ navigation, route }) {
     const isLeader = group.leaderId === user?.uid;
     const isPro = (userProfile?.plan || "free") === "personal";
     const leaderHasPersonal = (group.leaderPlan || "free") === "personal";
+    const groupColor = resolveGroupColor(group);
     // Barra: tareas de este grupo; visible si tú tienes Personal o el líder de este grupo (no cruza datos con otros grupos).
     const showProgressBar = totalTasks > 0 && (isPro || leaderHasPersonal);
     // Riesgo: solo líder suscrito (tu plan).
@@ -412,8 +445,8 @@ export default function GroupsScreen({ navigation, route }) {
     const swipeActions = [
       {
         icon: <MessageSquare color="#FFFFFF" size={22} />,
-        label: "Chat",
-        bgColor: "#4F46E5",
+        label: t("chat"),
+        bgColor: groupColor,
         onPress: () =>
           navigation.navigate("Chat", {
             groupId: group.id,
@@ -424,25 +457,30 @@ export default function GroupsScreen({ navigation, route }) {
       isLeader
         ? {
             icon: <Trash2 color="#FFFFFF" size={22} />,
-            label: t("delete") || "Eliminar",
+            label: t("delete"),
             bgColor: "#312E81",
             onPress: () => handleDeleteGroup(group),
           }
         : {
             icon: <LogOut color="#FFFFFF" size={22} />,
-            label: "Salir",
+            label: t("leave"),
             bgColor: "#7C3AED",
             onPress: () => handleLeaveGroup(group),
           },
     ];
 
     return (
-      <SwipeableRow actions={swipeActions} onOpen={handleRowOpen}>
+      <SwipeableRow
+        actions={swipeActions}
+        actionsBorderRadius={16}
+        onOpen={handleRowOpen}
+      >
         <TouchableOpacity
           style={[
             styles.groupCard,
             { backgroundColor: theme.card, borderColor: theme.border },
-            isLeader && styles.groupCardLeader,
+            { borderLeftWidth: 4, borderLeftColor: groupColor },
+            isLeader && { borderTopWidth: 2, borderTopColor: groupColor },
           ]}
           onPress={() => {
             openRowCloseRef.current?.();
@@ -452,14 +490,19 @@ export default function GroupsScreen({ navigation, route }) {
           activeOpacity={0.7}
           accessible={true}
           accessibilityRole="button"
-          accessibilityLabel={`Grupo: ${group.name}`}
-          accessibilityHint="Doble toque para ver el detalle del grupo. Desliza a la izquierda para más opciones"
+          accessibilityLabel={t("a11yGroupCard", { name: group.name })}
+          accessibilityHint={t("a11yOpenGroupHint")}
         >
           <View style={styles.cardHeader}>
             <View style={styles.cardContent}>
               <View style={styles.groupNameRow}>
                 {isLeader && (
-                  <Crown size={13} color="#4F46E5" strokeWidth={2.2} />
+                  <ShieldCheck
+                    size={18}
+                    color={groupColor}
+                    strokeWidth={2.2}
+                    accessibilityLabel={t("leader")}
+                  />
                 )}
                 <Text
                   style={[
@@ -508,8 +551,10 @@ export default function GroupsScreen({ navigation, route }) {
             </View>
 
             <GroupAvatar
+              key={`gav-${group.id}-${isDark ? "d" : "l"}-${groupColor}`}
               photoURL={group.photoURL}
               name={group.name}
+              color={groupColor}
               size={44}
               borderRadius={12}
             />
@@ -570,7 +615,7 @@ export default function GroupsScreen({ navigation, route }) {
                     {
                       width: `${progressPercentage}%`,
                       backgroundColor:
-                        progressPercentage === 100 ? "#16A34A" : "#4F46E5",
+                        progressPercentage === 100 ? "#16A34A" : groupColor,
                     },
                   ]}
                 />
@@ -624,8 +669,8 @@ export default function GroupsScreen({ navigation, route }) {
               placeholderTextColor={theme.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              accessibilityLabel="Buscar grupo"
-              accessibilityHint="Escribe el nombre del grupo que buscas"
+              accessibilityLabel={t("a11ySearchGroup")}
+              accessibilityHint={t("a11ySearchGroupHint")}
             />
           </View>
           <TouchableOpacity
@@ -640,7 +685,7 @@ export default function GroupsScreen({ navigation, route }) {
             ]}
             onPress={() => setFilterOpen(true)}
             activeOpacity={0.75}
-            accessibilityLabel="Filtrar grupos"
+            accessibilityLabel={t("a11yFilterGroups")}
           >
             <SlidersHorizontal
               color={statusFilter !== "Todas" ? "#FFF" : theme.textMuted}
@@ -671,6 +716,49 @@ export default function GroupsScreen({ navigation, route }) {
           </View>
         )}
       </View>
+
+      {showSwipeHint && groups.length > 0 && (
+        <View
+          style={[
+            styles.swipeHint,
+            {
+              backgroundColor: isDark ? "rgba(79,70,229,0.16)" : "#EEF2FF",
+              borderColor: isDark ? "rgba(165,180,252,0.35)" : "#C7D2FE",
+            },
+          ]}
+          accessible
+          accessibilityRole="summary"
+          accessibilityLabel={t("groupsSwipeHintA11y")}
+        >
+          <View
+            style={[
+              styles.swipeHintIcon,
+              {
+                backgroundColor: isDark
+                  ? "rgba(79,70,229,0.35)"
+                  : "#E0E7FF",
+              },
+            ]}
+          >
+            <ChevronsLeft color="#4F46E5" size={18} strokeWidth={2.4} />
+          </View>
+          <Text
+            style={[styles.swipeHintText, { color: theme.text }]}
+            numberOfLines={3}
+          >
+            {t("groupsSwipeHint")}
+          </Text>
+          <TouchableOpacity
+            onPress={dismissSwipeHint}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={t("groupsSwipeHintDismiss")}
+            style={styles.swipeHintClose}
+          >
+            <X color={theme.textMuted} size={16} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Filter Modal */}
       <Modal
@@ -740,7 +828,7 @@ export default function GroupsScreen({ navigation, route }) {
           data={filteredGroups}
           keyExtractor={(item) => item.id}
           renderItem={renderGroupCard}
-          extraData={groupTasks}
+          extraData={{ groupTasks, isDark, themeDark: theme.dark }}
           contentContainerStyle={[
             styles.listContainer,
             {
@@ -825,8 +913,10 @@ export default function GroupsScreen({ navigation, route }) {
                         activeOpacity={0.7}
                         accessible={true}
                         accessibilityRole="button"
-                        accessibilityLabel={`Rechazar invitación a ${inv.groupName}`}
-                        accessibilityHint="Doble toque para rechazar"
+                        accessibilityLabel={t("a11yRejectInviteNamed", {
+                          name: inv.groupName,
+                        })}
+                        accessibilityHint={t("a11yRejectInviteHint")}
                       >
                         <X color="#DC2626" size={18} />
                       </TouchableOpacity>
@@ -836,8 +926,10 @@ export default function GroupsScreen({ navigation, route }) {
                         activeOpacity={0.7}
                         accessible={true}
                         accessibilityRole="button"
-                        accessibilityLabel={`Aceptar invitación a ${inv.groupName}`}
-                        accessibilityHint="Doble toque para aceptar y unirte al grupo"
+                        accessibilityLabel={t("a11yAcceptInviteNamed", {
+                          name: inv.groupName,
+                        })}
+                        accessibilityHint={t("a11yAcceptInviteHint")}
                       >
                         <Check color="#FFFFFF" size={18} />
                       </TouchableOpacity>
@@ -852,12 +944,12 @@ export default function GroupsScreen({ navigation, route }) {
               <View style={styles.emptyState}>
                 <Users color={theme.textMuted} size={52} />
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                  {searchQuery ? "Sin resultados" : "Sin grupos"}
+                  {searchQuery ? t("noSearchResults") : t("noGroupsEmptyTitle")}
                 </Text>
                 <Text style={[styles.emptyHint, { color: theme.textMuted }]}>
                   {searchQuery
-                    ? `No se encontraron grupos para "${searchQuery}".`
-                    : "Crea un grupo de estudio o acepta una invitación para comenzar."}
+                    ? t("noSearchResults")
+                    : t("noGroupsEmptyHint")}
                 </Text>
               </View>
             )
@@ -887,8 +979,8 @@ export default function GroupsScreen({ navigation, route }) {
         activeOpacity={0.8}
         accessible={true}
         accessibilityRole="button"
-        accessibilityLabel="Crear nuevo grupo"
-        accessibilityHint="Doble toque para crear un grupo de estudio"
+        accessibilityLabel={t("a11yCreateGroupFab")}
+        accessibilityHint={t("a11yCreateGroupFabHint")}
       >
         <Plus color="#FFFFFF" size={24} />
       </TouchableOpacity>
@@ -1014,6 +1106,35 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100,
     gap: 10,
+  },
+  swipeHint: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingLeft: 10,
+    paddingRight: 8,
+  },
+  swipeHintIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  swipeHintText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
+  swipeHintClose: {
+    padding: 4,
   },
   groupCard: {
     backgroundColor: "#FFFFFF",

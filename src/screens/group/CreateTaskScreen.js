@@ -150,8 +150,8 @@ export default function CreateTaskScreen({ route, navigation }) {
       >
         <AppButton
           onPress={() => navigation.goBack()}
-          accessibilityLabel="Volver"
-          accessibilityHint="Doble toque para regresar sin guardar"
+          accessibilityLabel={t("back")}
+          accessibilityHint={t("doubleTapBackNoSave")}
         >
           <ChevronLeft color={theme.textSecondary} size={24} />
         </AppButton>
@@ -193,7 +193,7 @@ export default function CreateTaskScreen({ route, navigation }) {
         {/* Descripción */}
         <View>
           <Text style={[s.label, { color: theme.textSecondary }]}>
-            {t("taskDescription").toUpperCase()} (OPCIONAL)
+            {t("taskDescription").toUpperCase()} {t("optionalParen")}
           </Text>
           <TextInput
             style={[
@@ -240,8 +240,8 @@ export default function CreateTaskScreen({ route, navigation }) {
                     ]}
                     onPress={() => setAssigneeId(m.id)}
                     activeOpacity={0.7}
-                    accessibilityLabel={`Asignar a ${m.name}`}
-                    accessibilityHint="Doble toque para asignar esta tarea a este miembro"
+                    accessibilityLabel={t("a11yAssignTo", { name: m.name })}
+                    accessibilityHint={t("a11yAssignMemberHint")}
                     accessibilityState={{ selected }}
                   >
                     <Text
@@ -283,8 +283,8 @@ export default function CreateTaskScreen({ route, navigation }) {
               onChangeText={setDueDate}
               keyboardType="numeric"
               maxLength={10}
-              accessibilityLabel="Fecha de vencimiento"
-              accessibilityHint="Ingresa la fecha en formato día guión mes guión año"
+              accessibilityLabel={t("a11yDueDate")}
+              accessibilityHint={t("a11yDueDateHint")}
             />
             <AppButton
               style={[
@@ -295,8 +295,8 @@ export default function CreateTaskScreen({ route, navigation }) {
                 },
               ]}
               onPress={() => setShowDatePicker(true)}
-              accessibilityLabel="Abrir calendario"
-              accessibilityHint="Doble toque para seleccionar la fecha con el calendario"
+              accessibilityLabel={t("a11yOpenCalendar")}
+              accessibilityHint={t("a11yOpenCalendarHint")}
             >
               <Calendar color="#4F46E5" size={20} />
             </AppButton>
@@ -326,7 +326,7 @@ export default function CreateTaskScreen({ route, navigation }) {
         {/* ── Hora (opcional) ─────────────────────────────────────────────── */}
         <View>
           <Text style={[s.label, { color: theme.textSecondary }]}>
-            HORA (OPCIONAL)
+            {t("timeOptionalLabel")}
           </Text>
 
           <View style={s.timeRow}>
@@ -345,10 +345,10 @@ export default function CreateTaskScreen({ route, navigation }) {
               activeOpacity={useTime ? 0.7 : 1}
               accessibilityLabel={
                 useTime
-                  ? `Hora establecida: ${formatTime12h(dueTime)}`
-                  : "Sin hora específica"
+                  ? `${t("timeOptionalLabel")}: ${formatTime12h(dueTime)}`
+                  : t("noSpecificTime")
               }
-              accessibilityHint={useTime ? "Doble toque para cambiar la hora" : ""}
+              accessibilityHint={useTime ? t("notifyDayBeforeHint") : ""}
             >
               <Clock
                 color={useTime ? "#4F46E5" : theme.textMuted}
@@ -360,7 +360,7 @@ export default function CreateTaskScreen({ route, navigation }) {
                   { color: useTime ? theme.text : theme.textMuted },
                 ]}
               >
-                {useTime ? formatTime12h(dueTime) : "Sin hora específica"}
+                {useTime ? formatTime12h(dueTime) : t("noSpecificTime")}
               </Text>
             </TouchableOpacity>
 
@@ -383,8 +383,8 @@ export default function CreateTaskScreen({ route, navigation }) {
                   setUseTime(false);
                   setDueTime(DEFAULT_TIME); // resetea el valor
                 }}
-                accessibilityLabel="Quitar hora"
-                accessibilityHint="Doble toque para eliminar la hora específica"
+                accessibilityLabel={t("a11yRemoveTime")}
+                accessibilityHint={t("a11yRemoveTimeHint")}
               >
                 <X color="#EF4444" size={16} />
               </TouchableOpacity>
@@ -399,8 +399,8 @@ export default function CreateTaskScreen({ route, navigation }) {
                   },
                 ]}
                 onPress={() => setUseTime(true)}
-                accessibilityLabel="Agregar hora"
-                accessibilityHint="Doble toque para establecer una hora específica"
+                accessibilityLabel={t("a11yAddTime")}
+                accessibilityHint={t("a11yAddTimeHint")}
               >
                 <Clock color="#4F46E5" size={16} />
               </TouchableOpacity>
@@ -410,7 +410,7 @@ export default function CreateTaskScreen({ route, navigation }) {
           {/* Hint informativo cuando la hora está activa */}
           {useTime && (
             <Text style={[s.timeHint, { color: theme.textMuted }]}>
-              Recibirás una notificación el día anterior a esta hora.
+              {t("notifyDayBeforeHint")}
             </Text>
           )}
 
@@ -437,11 +437,9 @@ export default function CreateTaskScreen({ route, navigation }) {
           style={[s.btn, loading && { opacity: 0.7 }]}
           onPress={handleSubmit}
           disabled={loading}
-          accessibilityLabel={isEditing ? "Guardar cambios" : "Crear tarea"}
+          accessibilityLabel={isEditing ? t("saveChanges") : t("createTask")}
           accessibilityHint={
-            isEditing
-              ? "Doble toque para guardar los cambios de la tarea"
-              : "Doble toque para crear la nueva tarea"
+            isEditing ? t("a11ySaveTaskHint") : t("a11yCreateTaskSubmitHint")
           }
           accessibilityState={{ disabled: loading }}
         >

@@ -12,6 +12,7 @@ import {
   getDocs,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   orderBy,
@@ -1068,6 +1069,98 @@ export const getGroupFiles = (groupId, callback) => {
   );
 };
 
+/** Retención en papelera: 7 días. Después se purga (no se muestra ni se restaura). */
+export const FILE_TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const isFileInTrash = (file, now = Date.now()) => {
+  if (!file?.deletedAt) return false;
+  const deletedMs = new Date(file.deletedAt).getTime();
+  if (Number.isNaN(deletedMs)) return false;
+  return now - deletedMs < FILE_TRASH_RETENTION_MS;
+};
+
+export const isFileTrashExpired = (file, now = Date.now()) => {
+  if (!file?.deletedAt) return false;
+  const deletedMs = new Date(file.deletedAt).getTime();
+  if (Number.isNaN(deletedMs)) return true;
+  return now - deletedMs >= FILE_TRASH_RETENTION_MS;
+};
+
+export const getFileTrashDaysLeft = (file, now = Date.now()) => {
+  if (!file?.deletedAt) return 0;
+  const deletedMs = new Date(file.deletedAt).getTime();
+  if (Number.isNaN(deletedMs)) return 0;
+  const remaining = FILE_TRASH_RETENTION_MS - (now - deletedMs);
+  if (remaining <= 0) return 0;
+  return Math.max(1, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
+};
+
+/**
+ * Soft-delete: mueve el archivo a papelera (7 días). El blob en Storage se conserva.
+ */
+export const softDeleteGroupFile = async (fileId, deletedBy = null) => {
+  try {
+    const payload = {
+      deletedAt: new Date().toISOString(),
+    };
+    if (deletedBy) payload.deletedBy = deletedBy;
+    await updateDoc(doc(db, 'files', fileId), payload);
+    return true;
+  } catch (error) {
+    console.error('Error soft-deleting group file:', error);
+    throw error;
+  }
+};
+
+/**
+ * Restaurar archivo desde papelera (solo si aún está dentro de los 7 días).
+ */
+export const restoreGroupFile = async (fileId, file = null) => {
+  try {
+    if (file && isFileTrashExpired(file)) {
+      throw new Error('FILE_TRASH_EXPIRED');
+    }
+    if (fileId && !file) {
+      const snap = await getDoc(doc(db, 'files', fileId));
+      if (!snap.exists()) throw new Error('FILE_NOT_FOUND');
+      if (isFileTrashExpired({ deletedAt: snap.data()?.deletedAt })) {
+        throw new Error('FILE_TRASH_EXPIRED');
+      }
+    }
+    await updateDoc(doc(db, 'files', fileId), {
+      deletedAt: deleteField(),
+      deletedBy: deleteField(),
+    });
+    return true;
+  } catch (error) {
+    console.error('Error restoring group file:', error);
+    throw error;
+  }
+};
+
+/**
+ * Eliminación permanente del registro en Firestore (tras purga o borrar grupo).
+ * Supabase Storage se elimina por separado.
+ */
+export const permanentlyDeleteGroupFile = async (fileId) => {
+  try {
+    await deleteDoc(doc(db, 'files', fileId));
+    return true;
+  } catch (error) {
+    console.error('Error permanently deleting group file:', error);
+    throw error;
+  }
+};
+
+/**
+ * @deprecated Prefer softDeleteGroupFile / permanentlyDeleteGroupFile.
+ * Firma antigua: (groupId, fileId) — groupId se ignora.
+ */
+export const deleteGroupFile = async (groupId, fileId) => {
+  const id = fileId || groupId;
+  return permanentlyDeleteGroupFile(id);
+};
+
 /**
  * Registrar un archivo subido
  */
@@ -1130,20 +1223,6 @@ export const addGroupFile = async (fileData) => {
     return { id: docRef.id, ...fileData };
   } catch (error) {
     console.error('Error adding group file:', error);
-    throw error;
-  }
-};
-
-/**
- * Eliminar archivo de un grupo
- * Solo elimina el registro en Firestore, Supabase Storage se elimina por separado
- */
-export const deleteGroupFile = async (groupId, fileId) => {
-  try {
-    await deleteDoc(doc(db, 'files', fileId));
-    return true;
-  } catch (error) {
-    console.error('Error deleting group file:', error);
     throw error;
   }
 };

@@ -63,7 +63,7 @@ function MainStack() {
 }
 
 export default function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, pending2fa } = useAuth();
   const { theme } = useTheme();
   const intervalRef = useRef(null);
 
@@ -89,7 +89,7 @@ export default function AppNavigator() {
 
   // ── Presencia global: online cuando el app está activo ──────────────────
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || pending2fa) return;
 
     const uid = user.uid;
 
@@ -128,7 +128,7 @@ export default function AppNavigator() {
       sub.remove();
       goOffline();
     };
-  }, [user]);
+  }, [user, pending2fa]);
 
   // Mantener un árbol estable bajo NavigationContainer (evita medir insets mal con `null`).
   // El splash nativo sigue tapando hasta hideAsync.
@@ -136,5 +136,6 @@ export default function AppNavigator() {
     return <View style={{ flex: 1, backgroundColor: theme.bg }} collapsable={false} />;
   }
 
-  return user ? <MainStack /> : <AuthStack />;
+  // Con 2FA pendiente nos quedamos en AuthStack (pantalla OTP).
+  return user && !pending2fa ? <MainStack /> : <AuthStack />;
 }

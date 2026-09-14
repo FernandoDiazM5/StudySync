@@ -1,19 +1,23 @@
 import React, { createContext, useContext } from 'react';
-import { supabase } from '../config/supabase';
+import { supabase, getSupabaseCredentials } from '../config/supabase';
 
 const FileStorageContext = createContext(null);
 
 export const FileStorageProvider = ({ children }) => {
   /**
    * Subir archivo a Supabase Storage
-   * @param {string} groupId - ID del grupo
-   * @param {string} fileUri - URI del archivo local
-   * @param {string} fileName - Nombre del archivo
-   * @returns {Promise<{filePath, publicUrl, fileName}>}
+   * Usa arrayBuffer + SDK (mismo patrón que avatares). XHR+Blob en RN
+   * suele fallar con "Error de red" aunque la conexión esté bien.
    */
   const uploadGroupFile = async (groupId, fileUri, fileName, mimeType, onProgress) => {
     try {
-      // Fase 1 – preparando (0 → 10%)
+      const { url: supabaseUrl, anonKey } = getSupabaseCredentials();
+      if (!supabaseUrl || !anonKey) {
+        throw new Error(
+          'Supabase no está configurado. Revisa EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_ANON_KEY.',
+        );
+      }
+
       onProgress?.(5);
 
       const timestamp = Date.now();
@@ -21,53 +25,41 @@ export const FileStorageProvider = ({ children }) => {
       const filePath = `${groupId}/${timestamp}_${safeName}`;
       const contentType = mimeType || 'application/octet-stream';
 
-      // Leer como Blob (soportado en React Native / Hermes)
       const response = await fetch(fileUri);
-      if (!response.ok) throw new Error(`No se pudo leer el archivo (status ${response.status})`);
-      const blob = await response.blob();
-      onProgress?.(10);
+      if (!response.ok) {
+        throw new Error(`No se pudo leer el archivo (status ${response.status})`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error('El archivo está vacío o no se pudo leer.');
+      }
+      onProgress?.(15);
 
-      // Fase 2 – subiendo con XHR para progreso real (10 → 90%)
-      await new Promise((resolve, reject) => {
-        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-        const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+      // Progreso estimado mientras corre el upload (el SDK no expone % real).
+      let fake = 15;
+      const tick = setInterval(() => {
+        fake = Math.min(85, fake + 5);
+        onProgress?.(fake);
+      }, 280);
 
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          const token = session?.access_token || supabaseAnonKey;
-          const uploadUrl = `${supabaseUrl}/storage/v1/object/group-files/${filePath}`;
+      try {
+        const { error } = await supabase.storage
+          .from('group-files')
+          .upload(filePath, arrayBuffer, {
+            contentType,
+            upsert: false,
+          });
 
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', uploadUrl);
-          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-          xhr.setRequestHeader('Content-Type', contentType);
-          xhr.setRequestHeader('x-upsert', 'false');
+        if (error) {
+          console.error('[FileStorage] upload error:', error);
+          throw new Error(error.message || 'Error al subir archivo');
+        }
+      } finally {
+        clearInterval(tick);
+      }
 
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable && e.total > 0) {
-              // mapear 0-100% del XHR a 10-90% del progreso total.
-              // Clampear a [10, 90]: en algunos Android e.loaded puede superar
-              // e.total (quirk de XHR), lo que daría valores > 100.
-              const raw = 10 + Math.round((e.loaded / e.total) * 80);
-              onProgress?.(Math.min(90, Math.max(10, raw)));
-            }
-          };
+      onProgress?.(90);
 
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              onProgress?.(90);
-              resolve();
-            } else {
-              reject(new Error(`Error al subir (${xhr.status}): ${xhr.responseText}`));
-            }
-          };
-          xhr.onerror   = () => reject(new Error('Error de red al subir archivo'));
-          xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado'));
-
-          xhr.send(blob);
-        }).catch(reject);
-      });
-
-      // Obtener URL pública
       const { data: publicData } = supabase.storage
         .from('group-files')
         .getPublicUrl(filePath);

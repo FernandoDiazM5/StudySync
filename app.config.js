@@ -13,5 +13,7 @@ module.exports = ({ config }) => ({
     brevoSenderEmail: process.env.EXPO_PUBLIC_BREVO_SENDER_EMAIL || "",
     brevoSenderName:
       process.env.EXPO_PUBLIC_BREVO_SENDER_NAME || "StudySync",
+    supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || "",
+    supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "",
   },
 });

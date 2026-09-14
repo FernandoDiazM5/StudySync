@@ -85,7 +85,7 @@ export default function ForgotPasswordScreen({ navigation }) {
               onPress={() => navigation.navigate("Login")}
               activeOpacity={0.8}
               accessibilityLabel={t("backToLogin")}
-              accessibilityHint="Doble toque para volver al inicio de sesión"
+              accessibilityHint={t("doubleTapBackLogin")}
             >
               <Text style={styles.buttonText}>{t("backToLogin")}</Text>
             </AppButton>
@@ -121,8 +121,8 @@ export default function ForgotPasswordScreen({ navigation }) {
                     autoCorrect={false}
                     value={email}
                     onChangeText={setEmail}
-                    accessibilityLabel="Correo electrónico"
-                    accessibilityHint="Ingresa el correo asociado a tu cuenta"
+                    accessibilityLabel={t("email")}
+                    accessibilityHint={t("a11yAccountEmailHint")}
                   />
                 </View>
               </View>
@@ -133,7 +133,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 disabled={loading}
                 activeOpacity={0.8}
                 accessibilityLabel={t("send")}
-                accessibilityHint="Doble toque para enviar el correo de recuperación"
+                accessibilityHint={t("a11ySendResetHint")}
                 accessibilityState={{ disabled: loading }}
               >
                 {loading ? (
@@ -148,7 +148,7 @@ export default function ForgotPasswordScreen({ navigation }) {
               onPress={() => navigation.goBack()}
               style={styles.backLink}
               accessibilityLabel={t("back")}
-              accessibilityHint="Doble toque para volver al inicio de sesión"
+              accessibilityHint={t("doubleTapBackLogin")}
             >
               <ArrowLeft color="#6B7280" size={14} />
               <Text style={styles.backText}>{t("backToLogin")}</Text>

@@ -1,3 +1,89 @@
+# StudySync — Update 13 sep 2026
+
+**Autor:** Bryan Huaman  
+**Plataforma:** React Native (Expo)  
+**Fecha:** 13 de septiembre de 2026  
+**Versión oficial:** 2.0.10
+
+---
+
+## Nuevas funcionalidades
+
+### Exportar tareas de grupo a PDF
+- Botón **Descargar PDF** en el tab Tareas del detalle de grupo (estilo indigo StudySync).
+- PDF tematizado: cabecera de marca, resumen (total / pendientes / en progreso / completadas), barra de progreso, tabla con tarea, estado, asignado, fecha y prioridad (incluye descripción y subtareas).
+- Flujo con opciones **Guardar en dispositivo** o **Compartir**.
+- Dependencias: `expo-print` + `expo-sharing`.
+- Correcciones Android: escritura por base64 (evita temp ilegible), MIME/`UTI` PDF, compartir con `file://` (no `content://`), nombre con extensión `.pdf` y validación de firma `%PDF`.
+
+### Color personalizado por grupo
+- Paleta compartida (`groupColors`) y selector de swatches al **crear** y **editar** grupo.
+- Campo Firestore `color` en el documento del grupo.
+- En la lista: franja izquierda, avatar, corona/progreso y acción de chat usan el color del grupo.
+- Grupos antiguos sin color siguen el hash por nombre hasta que se editen.
+
+### Verificación en dos pasos (2FA) al iniciar sesión
+- Toggle en **Perfil → Verificación en dos pasos** (`users.twoFactorEnabled`).
+- Tras contraseña correcta, si 2FA está activo: OTP de 6 dígitos por correo vía **Brevo** (mismo estilo HTML indigo StudySync, asunto de acceso seguro).
+- Reutiliza `OtpVerificationScreen` en modo `login`; gate en `AuthContext` (`pending2fa`) para no abrir la app hasta validar el código.
+- Al cancelar/volver atrás en el OTP se cierra la sesión.
+- En pantalla (registro y 2FA) se indica que el código **vale 5 minutos** (además del correo).
+
+### Papelera de archivos (UX)
+- Interruptor **Archivos | Papelera** (una sola lista a la vez; sin sección mezclada abajo).
+- Indicador activo más claro (pill indigo + ícono) también en modo oscuro.
+- Íconos por tipo de archivo (PDF, imagen, audio, etc.) en lugar de la extensión de texto que se partía (wrap).
+- Al restaurar, vuelve automáticamente a Archivos.
+
+---
+
+## Mejoras y correcciones
+
+### Distintivo de líder en lista de grupos
+- Se reemplazó la corona por ícono **ShieldCheck** (misma posición a la izquierda del nombre).
+- Tamaño aumentado para mejor visibilidad.
+- En el panel de líder, la ★ se unificó con texto “Líder”.
+
+### Perfil — navegación atrás (Android)
+- En **Editar información personal** y **Cambiar contraseña**, el botón atrás del sistema vuelve al perfil (ya no salta a la vista principal de la app).
+- También cierra el menú de plan si está abierto.
+
+### Seguridad de configuración (credenciales)
+- Eliminadas de `app.json` las claves literales de Brevo (`brevoApiKey`, sender).
+- Los valores siguen inyectándose en build/dev vía `.env` + `app.config.js` y, en EAS, vía `eas.json` (ignorado por git).
+
+---
+
+## Archivos principales tocados
+
+| Archivo | Cambios |
+|---|---|
+| `src/utils/exportGroupTasksPdf.js` | Generar / guardar / compartir PDF |
+| `src/screens/group/GroupDetailsScreen.js` | Export PDF, color de grupo, papelera con toggle, íconos de archivo |
+| `src/utils/groupColors.js` | Paleta y resolución de color |
+| `src/components/GroupColorPicker.js` | Selector de color |
+| `src/components/GroupAvatar.js` | Prop `color` |
+| `src/screens/main/GroupsScreen.js` | Acentos por color, ShieldCheck de líder |
+| `src/screens/main/MessagesListScreen.js` / `ChatScreen.js` | Avatar con color de grupo |
+| `src/screens/group/CreateGroupScreen.js` | Color al crear |
+| `src/services/otpService.js` | OTP registro + login (2FA), HTML Brevo |
+| `src/services/login2faGate.js` | Gate post-password para 2FA |
+| `src/services/authService.js` | `signIn` con `requires2fa`, campo `twoFactorEnabled` |
+| `src/contexts/AuthContext.js` | `pending2fa` / complete / cancel |
+| `src/navigation/AppNavigator.js` | AuthStack mientras hay 2FA pendiente |
+| `src/screens/auth/LoginScreen.js` | Rama 2FA + envío OTP |
+| `src/screens/auth/OtpVerificationScreen.js` | Modo login/register + aviso 5 min |
+| `src/screens/main/ProfileScreen.js` | Toggle 2FA, BackHandler en subvistas |
+| `src/locales/translations.js` | Claves ES / EN / QU |
+| `app.json` | Sin secretos Brevo embebidos |
+| `app.config.js` | Inyecta Brevo/Supabase desde env |
+
+---
+
+*StudySync — Colaboración académica, sin distracciones.*
+
+---
+
 # StudySync — Update Final
 
 **Autor:** Bryan Huaman
@@ -86,7 +172,7 @@
 
 **Autor:** Bryan Huaman Roque
 **Plataforma:** React Native (Expo)
-**Versión:** 3.0.0
+**Versión de actualización:** 3.0.0
 
 ---
 
@@ -155,7 +241,7 @@
 
 **Autor:** Bryan Huaman Roque  
 **Plataforma:** React Native (Expo)  
-**Versión:** 2.0.0
+**Versión de actualización:** 2.0.0
 
 ---
 

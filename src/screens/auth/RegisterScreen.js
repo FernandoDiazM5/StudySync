@@ -133,8 +133,8 @@ export default function RegisterScreen({ navigation }) {
           <AppButton
             onPress={() => navigation.goBack()}
             style={styles.backButton}
-            accessibilityLabel="Volver"
-            accessibilityHint="Doble toque para regresar al inicio de sesión"
+            accessibilityLabel={t("back")}
+            accessibilityHint={t("doubleTapBackLogin")}
           >
             <ChevronLeft color="#9CA3AF" size={24} />
           </AppButton>
@@ -157,8 +157,8 @@ export default function RegisterScreen({ navigation }) {
                 value={name}
                 onChangeText={setName}
                 onBlur={() => touch('name')}
-                accessibilityLabel="Campo nombre completo"
-                accessibilityHint="Ingresa tu nombre y apellido"
+                accessibilityLabel={t("a11yFieldFullName")}
+                accessibilityHint={t("a11yFieldFullNameHint")}
               />
               {touched.name && errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
             </View>
@@ -175,8 +175,8 @@ export default function RegisterScreen({ navigation }) {
                 value={email}
                 onChangeText={setEmail}
                 onBlur={() => touch('email')}
-                accessibilityLabel="Campo correo electrónico"
-                accessibilityHint="Ingresa tu dirección de correo electrónico"
+                accessibilityLabel={t("a11yFieldEmail")}
+                accessibilityHint={t("a11yFieldEmailHint")}
               />
               {touched.email && errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
@@ -192,8 +192,8 @@ export default function RegisterScreen({ navigation }) {
                 value={phone}
                 onChangeText={(v) => { setPhone(fmtPhone(v)); touch('phone'); }}
                 onBlur={() => touch('phone')}
-                accessibilityLabel="Campo número de teléfono"
-                accessibilityHint="Ingresa tu número de teléfono de 9 dígitos"
+                accessibilityLabel={t("a11yFieldPhone")}
+                accessibilityHint={t("a11yFieldPhoneHint")}
               />
               {touched.phone && errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
             </View>
@@ -209,15 +209,18 @@ export default function RegisterScreen({ navigation }) {
                   value={password}
                   onChangeText={(text) => { setPassword(text); touch('password'); }}
                   onBlur={() => touch('password')}
-                  accessibilityLabel="Campo contraseña"
-                  accessibilityHint="Ingresa una contraseña segura de al menos 8 caracteres"
+                  accessibilityLabel={t("a11yFieldPassword")}
+                  accessibilityHint={t("a11yFieldPasswordHint")}
                 />
                 <AppButton
                   style={styles.eyeBtn}
                   onPress={() => setShowPwd((v) => !v)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  overrideText={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  accessibilityLabel={showPwd ? t("hidePassword") : t("showPassword")}
+                  accessibilityHint={
+                    showPwd ? t("hidePasswordHint") : t("showPasswordHint")
+                  }
+                  overrideText={showPwd ? t("hidePassword") : t("showPassword")}
                 >
                   {showPwd ? <EyeOff color="#9CA3AF" size={18} /> : <Eye color="#9CA3AF" size={18} />}
                 </AppButton>
@@ -242,15 +245,28 @@ export default function RegisterScreen({ navigation }) {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   onBlur={() => touch('confirmPassword')}
-                  accessibilityLabel="Campo confirmar contraseña"
-                  accessibilityHint="Repite la contraseña para confirmarla"
+                  accessibilityLabel={t("a11yFieldConfirmPassword")}
+                  accessibilityHint={t("a11yFieldConfirmPasswordHint")}
                 />
                 <View style={styles.confirmIcons}>
                   <AppButton
                     onPress={() => setShowConfirmPwd((v) => !v)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityLabel={showConfirmPwd ? 'Ocultar confirmación de contraseña' : 'Mostrar confirmación de contraseña'}
-                    overrideText={showConfirmPwd ? 'Ocultar confirmación de contraseña' : 'Mostrar confirmación de contraseña'}
+                    accessibilityLabel={
+                      showConfirmPwd
+                        ? t("hideConfirmPassword")
+                        : t("showConfirmPassword")
+                    }
+                    accessibilityHint={
+                      showConfirmPwd
+                        ? t("hideConfirmPasswordHint")
+                        : t("showConfirmPasswordHint")
+                    }
+                    overrideText={
+                      showConfirmPwd
+                        ? t("hideConfirmPassword")
+                        : t("showConfirmPassword")
+                    }
                   >
                     {showConfirmPwd ? <EyeOff color="#9CA3AF" size={18} /> : <Eye color="#9CA3AF" size={18} />}
                   </AppButton>
@@ -271,14 +287,14 @@ export default function RegisterScreen({ navigation }) {
               onPress={handleRegister}
               disabled={!isValid || loading}
               activeOpacity={0.8}
-              accessibilityLabel="Registrarse"
-              accessibilityHint="Doble toque para crear tu cuenta"
+              accessibilityLabel={t("a11yRegister")}
+              accessibilityHint={t("a11yRegisterHint")}
               accessibilityState={{ disabled: !isValid || loading }}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.buttonText}>CONTINUAR</Text>
+                <Text style={styles.buttonText}>{t('continue').toUpperCase()}</Text>
               )}
             </AppButton>
           </View>

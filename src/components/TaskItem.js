@@ -277,9 +277,11 @@ export default function TaskItem({
           accessible
           accessibilityRole="button"
           accessibilityLabel={
-            isCompleted ? `Tarea ${task.title}, completada`
-            : isInProgress ? `Tarea ${task.title}, en progreso`
-            : `Tarea ${task.title}, pendiente`
+            isCompleted
+              ? t("a11yTaskCompleted", { title: task.title })
+              : isInProgress
+                ? t("a11yTaskInProgress", { title: task.title })
+                : t("a11yTaskPending", { title: task.title })
           }
           accessibilityState={{ checked: isCompleted, disabled: !canToggleStatus }}
         >
@@ -346,7 +348,7 @@ export default function TaskItem({
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessible
                 accessibilityRole="button"
-                accessibilityLabel={`Editar tarea ${task.title}`}
+                accessibilityLabel={t("a11yEditTask", { title: task.title })}
               >
                 <Pencil color="#6B7280" size={14} />
               </TouchableOpacity>
@@ -650,9 +652,13 @@ export default function TaskItem({
   );
 
   if (swipeActions.length > 0) {
-    return <SwipeableRow actions={swipeActions}>{content}</SwipeableRow>;
+    return (
+      <View style={styles.swipeWrap}>
+        <SwipeableRow actions={swipeActions}>{content}</SwipeableRow>
+      </View>
+    );
   }
-  return content;
+  return <View style={styles.swipeWrap}>{content}</View>;
 }
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
@@ -689,10 +695,12 @@ const styles = StyleSheet.create({
   },
 
   // ─ Tarjeta ────────────────────────────────────────────────────────────────
+  swipeWrap: {
+    marginBottom: 8,
+  },
   container: {
     borderWidth: 1,
     borderRadius: 10,
-    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,

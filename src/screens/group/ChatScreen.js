@@ -32,8 +32,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { headerPaddingTop } from "../../utils/headerInsets";
 import {
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
   Send,
   Star,
+  Search,
   UsersRound,
   Wrench,
   Pencil,
@@ -53,9 +56,35 @@ import {
   getCalendarDateKeyInTimeZone,
   formatChatDateSeparatorLabel,
 } from "../../utils/dateUtils";
-import { Audio } from "expo-av";
+import { useAudioPlayer } from "expo-audio";
 import { notifyNewMessage } from "../../services/notificationService";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+
+/** Normaliza texto para búsqueda (minúsculas, sin tildes). */
+const normalizeSearchText = (value = "") =>
+  String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+/** ¿El mensaje coincide con la consulta? */
+const messageMatchesQuery = (msg, normalizedQuery) => {
+  if (!msg || msg.type === "separator" || !normalizedQuery) return false;
+  const haystacks = [
+    msg.text,
+    msg.authorName,
+    msg.question,
+    msg.rouletteTitle,
+    msg.rouletteWinner,
+    msg.replyTo?.text,
+    msg.replyTo?.authorName,
+    Array.isArray(msg.options) ? msg.options.join(" ") : "",
+    Array.isArray(msg.rouletteItems) ? msg.rouletteItems.join(" ") : "",
+  ];
+  return haystacks.some(
+    (part) => part && normalizeSearchText(part).includes(normalizedQuery),
+  );
+};
 
 // ── Typing bubble con 3 dots animados ────────────────────────
 // React.memo evita que se re-renderice (y se reinicie la animación)
@@ -286,7 +315,13 @@ export default function ChatScreen({ route, navigation }) {
   const [highlightedMsgId, setHighlightedMsgId] = useState(null);
   const processedHighlightRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-  const typingSoundRef = useRef(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
+  const searchInputRef = useRef(null);
+  const typingPlayer = useAudioPlayer(
+    require("../../../assets/sounds/typing.wav"),
+  );
   const [inputText, setInputText] = useState(""); // valor controlado del TextInput
   const [resolvedMe, setResolvedMe] = useState(null);
   const inputValueRef = useRef(""); // copia ref para handleSend (sin stale closure)
@@ -405,20 +440,6 @@ export default function ChatScreen({ route, navigation }) {
     };
   }, [groupId, user]);
 
-  // Preload typing sound
-  useEffect(() => {
-    let sound;
-    Audio.Sound.createAsync(require("../../../assets/sounds/typing.wav"))
-      .then(({ sound: s }) => {
-        sound = s;
-        typingSoundRef.current = s;
-      })
-      .catch(() => {});
-    return () => {
-      sound?.unloadAsync().catch(() => {});
-    };
-  }, []);
-
   useEffect(() => {
     if (!isSubscriber) {
       setShowExtraMenu(false);
@@ -487,10 +508,15 @@ export default function ChatScreen({ route, navigation }) {
   const prevTypingLenRef = useRef(0);
   useEffect(() => {
     if (typingUserIds.length > 0 && prevTypingLenRef.current === 0) {
-      typingSoundRef.current?.replayAsync().catch(() => {});
+      try {
+        typingPlayer.seekTo(0);
+        typingPlayer.play();
+      } catch {
+        // ignore playback errors
+      }
     }
     prevTypingLenRef.current = typingUserIds.length;
-  }, [typingUserIds]);
+  }, [typingUserIds, typingPlayer]);
 
   const handleSend = async () => {
     const textToSend = inputValueRef.current.trim();
@@ -893,6 +919,89 @@ export default function ChatScreen({ route, navigation }) {
   // Memoize so FlatList doesn't re-render all messages when typingUserIds changes
   const messageList = useMemo(() => buildMessageList(messages), [messages]);
 
+  const normalizedSearchQuery = useMemo(
+    () => normalizeSearchText(searchQuery.trim()),
+    [searchQuery],
+  );
+
+  /** IDs de coincidencias: más recientes primero (navegación natural en chat). */
+  const searchMatchIds = useMemo(() => {
+    if (!normalizedSearchQuery) return [];
+    return messages
+      .filter((msg) => messageMatchesQuery(msg, normalizedSearchQuery))
+      .sort((a, b) =>
+        String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+      )
+      .map((msg) => msg.id);
+  }, [messages, normalizedSearchQuery]);
+
+  const scrollToSearchMatch = useCallback(
+    (matchIndex) => {
+      const matchId = searchMatchIds[matchIndex];
+      if (!matchId) return;
+      const listIndex = messageList.findIndex((item) => item.id === matchId);
+      if (listIndex < 0) return;
+      setHighlightedMsgId(matchId);
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToIndex({
+          index: listIndex,
+          animated: true,
+          viewPosition: 0.45,
+        });
+      });
+      setTimeout(() => {
+        setHighlightedMsgId((current) =>
+          current === matchId ? null : current,
+        );
+      }, 2800);
+    },
+    [searchMatchIds, messageList],
+  );
+
+  // Al cambiar la consulta, ir a la coincidencia más reciente
+  const searchMatchKey = searchMatchIds.join("|");
+  useEffect(() => {
+    if (!searchOpen || !normalizedSearchQuery) {
+      setSearchMatchIndex(0);
+      return;
+    }
+    if (!searchMatchIds.length) {
+      setSearchMatchIndex(0);
+      return;
+    }
+    setSearchMatchIndex(0);
+    const timer = setTimeout(() => scrollToSearchMatch(0), 80);
+    return () => clearTimeout(timer);
+    // searchMatchKey cubre cambios de resultados; scrollToSearchMatch es estable por ids/lista
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedSearchQuery, searchOpen, searchMatchKey]);
+
+  const goToPrevSearchMatch = useCallback(() => {
+    if (searchMatchIds.length < 2) return;
+    const next = (searchMatchIndex - 1 + searchMatchIds.length) % searchMatchIds.length;
+    setSearchMatchIndex(next);
+    scrollToSearchMatch(next);
+  }, [searchMatchIds, searchMatchIndex, scrollToSearchMatch]);
+
+  const goToNextSearchMatch = useCallback(() => {
+    if (searchMatchIds.length < 2) return;
+    const next = (searchMatchIndex + 1) % searchMatchIds.length;
+    setSearchMatchIndex(next);
+    scrollToSearchMatch(next);
+  }, [searchMatchIds, searchMatchIndex, scrollToSearchMatch]);
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    setTimeout(() => searchInputRef.current?.focus(), 120);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchMatchIndex(0);
+    setHighlightedMsgId(null);
+  }, []);
+
   const onlineMemberById = useMemo(() => {
     const map = new Map();
     onlineMembers.forEach((m) => {
@@ -964,7 +1073,7 @@ export default function ChatScreen({ route, navigation }) {
           <View style={styles.pollHeader}>
             <BarChart2 color="#6366F1" size={14} />
             <Text style={[styles.pollLabel, { color: "#6366F1" }]}>
-              ENCUESTA
+              {t("pollBadge")}
             </Text>
           </View>
           <Text style={[styles.pollQuestion, { color: theme.text }]}>
@@ -1123,7 +1232,7 @@ export default function ChatScreen({ route, navigation }) {
               { color: theme.dark ? "#A5B4FC" : "#4338CA" },
             ]}
           >
-            ¡Le tocó!
+            {t("spinWinner")}
           </Text>
           <Text
             style={[
@@ -1186,7 +1295,7 @@ export default function ChatScreen({ route, navigation }) {
 
     const replyAuthorName = msg.replyTo
       ? msg.replyTo.authorId === user.uid
-        ? "Tú"
+        ? t("you")
         : getMemberName(msg.replyTo.authorId, msg.replyTo.authorName)
       : null;
 
@@ -1314,7 +1423,7 @@ export default function ChatScreen({ route, navigation }) {
                       isMe ? styles.editedLabelMe : styles.editedLabelOther,
                     ]}
                   >
-                    editado
+                    {t("edited")}
                   </Text>
                 )}
                 <Text
@@ -1347,51 +1456,163 @@ export default function ChatScreen({ route, navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { backgroundColor: theme.headerBg, paddingTop: headerPaddingTop(insets, 12) },
-        ]}
-        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
-      >
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel={t("back") || "Volver"}
-            accessibilityHint="Doble toque para regresar"
-          >
-            <ChevronLeft color="#FFFFFF" size={24} />
-          </TouchableOpacity>
-          <GroupAvatar
-            photoURL={group.photoURL}
-            name={group.name}
-            size={36}
-            borderRadius={10}
-            onColoredHeader
-            style={{ marginRight: 8 }}
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {group.name}
-            </Text>
-            <Text style={styles.headerSubtitle}>{t("onlyAcademicTopics")}</Text>
+      {/* Header + búsqueda */}
+      <View onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: theme.headerBg,
+              paddingTop: headerPaddingTop(insets, 12),
+            },
+          ]}
+        >
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={t("back") || "Volver"}
+              accessibilityHint={t("doubleTapBack")}
+            >
+              <ChevronLeft color="#FFFFFF" size={24} />
+            </TouchableOpacity>
+            <GroupAvatar
+              photoURL={group.photoURL}
+              name={group.name}
+              color={group.color}
+              size={36}
+              circular
+              onColoredHeader
+              style={{ marginRight: 8 }}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {group.name}
+              </Text>
+              <Text style={styles.headerSubtitle}>
+                {t("onlyAcademicTopics")}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={searchOpen ? closeSearch : openSearch}
+              style={styles.headerActionBtn}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={
+                searchOpen ? t("searchCloseA11y") : t("searchMessagesA11y")
+              }
+              accessibilityHint={t("searchMessagesHint")}
+            >
+              {searchOpen ? (
+                <X color="#FFFFFF" size={20} />
+              ) : (
+                <Search color="#C7D2FE" size={20} />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowOnline(true)}
+              style={styles.headerActionBtn}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={`${t("groupMembers")}, ${onlineMembers.length} ${t("online")}`}
+              accessibilityHint={t("a11yViewMembersHint")}
+            >
+              <UsersRound color="#C7D2FE" size={20} />
+              {onlineMembers.length > 0 && <View style={styles.onlineDot} />}
+            </TouchableOpacity>
           </View>
         </View>
-        <TouchableOpacity
-          onPress={() => setShowOnline(true)}
-          style={{ marginLeft: 10 }}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={`${t("groupMembers")}, ${onlineMembers.length} ${t("online")}`}
-          accessibilityHint="Doble toque para ver miembros conectados"
-        >
-          <UsersRound color="#C7D2FE" size={20} />
-          {onlineMembers.length > 0 && <View style={styles.onlineDot} />}
-        </TouchableOpacity>
+
+        {searchOpen && (
+          <View
+            style={[
+              styles.chatSearchPanel,
+              {
+                backgroundColor: theme.headerBg,
+                borderTopColor: "rgba(255,255,255,0.12)",
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.chatSearchInputWrap,
+                {
+                  backgroundColor: theme.dark
+                    ? "rgba(255,255,255,0.12)"
+                    : "rgba(255,255,255,0.18)",
+                },
+              ]}
+            >
+              <Search color="#C7D2FE" size={16} />
+              <TextInput
+                ref={searchInputRef}
+                style={styles.chatSearchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={t("searchMessages")}
+                placeholderTextColor="#C7D2FE"
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                accessibilityLabel={t("searchMessagesA11y")}
+                accessibilityHint={t("searchMessagesHint")}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery("")}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("searchCloseA11y")}
+                >
+                  <X color="#E0E7FF" size={16} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {normalizedSearchQuery.length > 0 && (
+              <View style={styles.chatSearchMeta}>
+                <Text style={styles.chatSearchMetaText} numberOfLines={1}>
+                  {searchMatchIds.length === 0
+                    ? t("searchNoMatches")
+                    : t("searchMatchOf", {
+                        current: String(searchMatchIndex + 1),
+                        total: String(searchMatchIds.length),
+                      })}
+                </Text>
+                <View style={styles.chatSearchNav}>
+                  <TouchableOpacity
+                    onPress={goToPrevSearchMatch}
+                    disabled={searchMatchIds.length < 2}
+                    style={[
+                      styles.chatSearchNavBtn,
+                      searchMatchIds.length < 2 && { opacity: 0.35 },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("searchPrevMatch")}
+                  >
+                    <ChevronUp color="#FFFFFF" size={18} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={goToNextSearchMatch}
+                    disabled={searchMatchIds.length < 2}
+                    style={[
+                      styles.chatSearchNavBtn,
+                      searchMatchIds.length < 2 && { opacity: 0.35 },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("searchNextMatch")}
+                  >
+                    <ChevronDown color="#FFFFFF" size={18} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       <ChatBodyShell headerHeight={headerHeight}>
@@ -1400,7 +1621,7 @@ export default function ChatScreen({ route, navigation }) {
             ref={flatListRef}
             style={styles.messagesContainer}
             data={messageList}
-            extraData={messages}
+            extraData={{ messages, highlightedMsgId, searchMatchIds }}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             inverted
@@ -1500,7 +1721,7 @@ export default function ChatScreen({ route, navigation }) {
                         <Text style={styles.mentionAvatarText}>@</Text>
                       </View>
                       <Text style={[styles.mentionName, { color: theme.text }]}>
-                        todos
+                        {t("mentionEveryone")}
                       </Text>
                       <Text
                         style={[
@@ -1511,7 +1732,7 @@ export default function ChatScreen({ route, navigation }) {
                           },
                         ]}
                       >
-                        notifica a todos
+                        {t("mentionEveryoneHint")}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1556,7 +1777,7 @@ export default function ChatScreen({ route, navigation }) {
                             },
                           ]}
                         >
-                          líder
+                          {t("leader")}
                         </Text>
                       )}
                     </TouchableOpacity>
@@ -1587,7 +1808,7 @@ export default function ChatScreen({ route, navigation }) {
                     numberOfLines={1}
                   >
                     {replyingTo.authorId === user.uid
-                      ? "Tú"
+                      ? t("you")
                       : getMemberName(replyingTo.authorId)}
                   </Text>
                   <Text
@@ -1685,7 +1906,7 @@ export default function ChatScreen({ route, navigation }) {
                   accessible={true}
                   accessibilityRole="button"
                   accessibilityLabel={t("send") || "Enviar mensaje"}
-                  accessibilityHint="Doble toque para enviar el mensaje"
+                  accessibilityHint={t("a11ySendMessageHint")}
                 >
                   <View style={styles.sendIconContainer}>
                     <Send color={hasText ? "#4F46E5" : "#9CA3AF"} size={20} />
@@ -2429,9 +2650,60 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: 8,
+  },
+  headerActionBtn: {
+    padding: 6,
+    borderRadius: 8,
+  },
   backButton: { padding: 4, borderRadius: 8 },
   headerTitle: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
   headerSubtitle: { fontSize: 12, color: "#C7D2FE", marginTop: 1 },
+  chatSearchPanel: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  chatSearchInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: Platform.OS === "ios" ? 10 : 4,
+    gap: 8,
+  },
+  chatSearchInput: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 14,
+    paddingVertical: Platform.OS === "ios" ? 0 : 6,
+  },
+  chatSearchMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: 2,
+  },
+  chatSearchMetaText: {
+    flex: 1,
+    color: "#E0E7FF",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  chatSearchNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  chatSearchNavBtn: {
+    padding: 4,
+    borderRadius: 6,
+  },
   messagesContainer: { flex: 1 },
   messagesList: { padding: 16 },
   reminderBanner: {

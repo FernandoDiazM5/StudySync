@@ -17,6 +17,8 @@ import { headerPaddingTop } from "../../utils/headerInsets";
 import { ChevronLeft, Users } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { createGroup } from "../../services/firestoreService";
+import GroupColorPicker from "../../components/GroupColorPicker";
+import { GROUP_COLOR_PALETTE } from "../../utils/groupColors";
 
 export default function CreateGroupScreen({ navigation }) {
   const { user, userProfile } = useAuth();
@@ -25,6 +27,7 @@ export default function CreateGroupScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [color, setColor] = useState(GROUP_COLOR_PALETTE[0]);
   const [loading, setLoading] = useState(false);
 
   const handleCreateGroup = async () => {
@@ -41,6 +44,7 @@ export default function CreateGroupScreen({ navigation }) {
         leaderName: userProfile?.name || user.displayName || "Líder",
         members: [user.uid],
         leaderPlan: userProfile?.plan || "free",
+        color,
       });
       Alert.alert(t("success"), t("groupCreatedSuccess"), [
         { text: "OK", onPress: () => navigation.goBack() },
@@ -66,8 +70,8 @@ export default function CreateGroupScreen({ navigation }) {
       >
         <AppButton
           onPress={() => navigation.goBack()}
-          accessibilityLabel="Volver"
-          accessibilityHint="Doble toque para regresar"
+          accessibilityLabel={t("back")}
+          accessibilityHint={t("doubleTapBack")}
         >
           <ChevronLeft color={theme.textSecondary} size={24} />
         </AppButton>
@@ -81,15 +85,14 @@ export default function CreateGroupScreen({ navigation }) {
         <View
           style={[
             s.iconWrap,
-            { backgroundColor: theme.dark ? "#1e1b4b" : "#EEF2FF" },
+            { backgroundColor: color },
           ]}
         >
-          <Users color="#4F46E5" size={32} />
+          <Users color="#FFFFFF" size={32} />
         </View>
 
         <Text style={[s.subtitle, { color: theme.textSecondary }]}>
-          {t("groupDescription") ||
-            "Crea un nuevo espacio de trabajo para tu materia o proyecto."}
+          {t("createGroupSubtitle")}
         </Text>
 
         <View>
@@ -109,14 +112,14 @@ export default function CreateGroupScreen({ navigation }) {
             placeholderTextColor={theme.textMuted}
             value={name}
             onChangeText={setName}
-            accessibilityLabel="Nombre del grupo"
-            accessibilityHint="Escribe el nombre de tu grupo de estudio"
+            accessibilityLabel={t("groupName")}
+            accessibilityHint={t("a11yWriteGroupNameHint")}
           />
         </View>
 
         <View>
           <Text style={[s.label, { color: theme.textSecondary }]}>
-            {t("groupDescription").toUpperCase()} (OPCIONAL)
+            {t("groupDescription").toUpperCase()} {t("optionalParen")}
           </Text>
           <TextInput
             style={[
@@ -131,17 +134,24 @@ export default function CreateGroupScreen({ navigation }) {
             placeholderTextColor={theme.textMuted}
             value={desc}
             onChangeText={setDesc}
-            accessibilityLabel="Descripción del grupo"
-            accessibilityHint="Escribe una descripción opcional para el grupo"
+            accessibilityLabel={t("groupDescription")}
+            accessibilityHint={t("a11yWriteGroupDescHint")}
           />
         </View>
+
+        <GroupColorPicker
+          label={t("groupColorLabel")}
+          value={color}
+          onChange={setColor}
+          disabled={loading}
+        />
 
         <AppButton
           style={[s.btn, loading && { opacity: 0.7 }]}
           onPress={handleCreateGroup}
           disabled={loading}
-          accessibilityLabel="Crear grupo"
-          accessibilityHint="Doble toque para crear el grupo de estudio"
+          accessibilityLabel={t("createGroup")}
+          accessibilityHint={t("a11yCreateGroupHint")}
           accessibilityState={{ disabled: loading }}
         >
           {loading ? (

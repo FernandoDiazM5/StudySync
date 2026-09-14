@@ -14,7 +14,13 @@
       "backgroundColor": "#F9FAFB"
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.studysync.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
+      }
     },
     "android": {
       "backgroundColor": "#F9FAFB",
@@ -42,6 +48,7 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-system-ui",
+      "expo-sharing",
       [
         "expo-navigation-bar",
         {
@@ -60,9 +67,9 @@
         "position": "relative"
       },
       "eas": {
-        "projectId": "718987b0-c2e4-4b97-a90e-c4a03206921f"
+        "projectId": "c32b61d5-be48-46d6-80ff-2f4af0a9e82a"
       }
     },
-    "owner": "bhhryan25"
+    "owner": "bhryan25"
   }
 }

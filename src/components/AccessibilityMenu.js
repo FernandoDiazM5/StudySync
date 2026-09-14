@@ -42,21 +42,18 @@ const GridButton = memo(
     iconSize,
   }) => {
     const { theme } = useTheme();
-    const { contrastActive, language } = useAccessibility();
+    const { contrastActive, t } = useAccessibility();
 
     const isActive = currentLevel > 0;
     const levelText =
       levels === 1
         ? isActive
-          ? language === "en"
-            ? "On"
-            : "Activado"
-          : language === "en"
-            ? "Off"
-            : "Desactivado"
-        : language === "en"
-          ? `Level ${currentLevel + 1} of ${levels}`
-          : `Nivel ${currentLevel + 1} de ${levels}`;
+          ? t("enabled")
+          : t("disabled")
+        : t("levelOf", {
+            current: String(currentLevel + 1),
+            total: String(levels),
+          });
 
     return (
       <TouchableOpacity
@@ -186,22 +183,26 @@ export default function AccessibilityMenu() {
   const handleTextSize = useCallback(() => {
     setTextLevel((p) => {
       const next = p + 1 > 2 ? 0 : p + 1;
-      const part =
-        language === "en" ? `${next + 1} of 3` : `${next + 1} de 3`;
+      const part = t("levelOf", {
+        current: String(next + 1),
+        total: "3",
+      });
       announce(`${t("textSize")}, ${part}`);
       return next;
     });
-  }, [announce, language, t]);
+  }, [announce, t]);
 
   const handleSpacing = useCallback(() => {
     setSpacingLevel((p) => {
       const next = p + 1 > 2 ? 0 : p + 1;
-      const part =
-        language === "en" ? `${next + 1} of 3` : `${next + 1} de 3`;
+      const part = t("levelOf", {
+        current: String(next + 1),
+        total: "3",
+      });
       announce(`${t("lineSpacing")}, ${part}`);
       return next;
     });
-  }, [announce, language, t]);
+  }, [announce, t]);
 
   const handleContrast = useCallback(() => {
     setContrastActive((p) => {
@@ -224,11 +225,8 @@ export default function AccessibilityMenu() {
       const next = !p;
       if (next) {
         try {
-          const lang = language === "en" ? "en" : "es";
-          Speech.speak(
-            language === "en" ? "Narrator enabled." : "Narrador activado.",
-            { language: lang },
-          );
+          const lang = language === "en" ? "en" : language === "qu" ? "es" : "es";
+          Speech.speak(t("narratorEnabled"), { language: lang });
         } catch {
           /* noop */
         }
@@ -239,18 +237,15 @@ export default function AccessibilityMenu() {
           /* noop */
         }
         try {
-          const lang = language === "en" ? "en" : "es";
-          Speech.speak(
-            language === "en" ? "Narrator disabled." : "Narrador desactivado.",
-            { language: lang },
-          );
+          const lang = language === "en" ? "en" : language === "qu" ? "es" : "es";
+          Speech.speak(t("narratorDisabled"), { language: lang });
         } catch {
           /* noop */
         }
       }
       return next;
     });
-  }, [language]);
+  }, [language, t]);
 
   // Renderiza el JSX en cuanto isMenuOpen=true (antes de que mounted se actualice),
   // para que el Animated.View nativo esté montado cuando la animación con

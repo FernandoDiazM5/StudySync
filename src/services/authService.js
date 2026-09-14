@@ -16,6 +16,12 @@ import {
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebaseConfig";
 import { invalidateUserCache } from "./firestoreService";
+import {
+  beginSignInGate,
+  endSignInGate,
+  markPending2fa,
+  clearPending2faMark,
+} from "./login2faGate";
 
 /**
  * Combina el documento Firestore `users` con Auth (displayName, email, photo)
@@ -41,6 +47,7 @@ export const mergeUserProfileFromAuth = (firebaseUser, firestoreData) => {
     plan: d.plan || "free",
     planBilling: d.planBilling || "monthly",
     photoURL: d.photoURL || firebaseUser.photoURL || null,
+    twoFactorEnabled: !!d.twoFactorEnabled,
   };
 };
 
@@ -110,18 +117,39 @@ export const registerUser = async (email, password, name, phone) => {
 };
 
 /**
- * Iniciar sesión
+ * Iniciar sesión. Si el usuario tiene 2FA, marca el gate pendiente
+ * (AuthContext no abre MainStack hasta verificar el OTP).
  */
 export const signIn = async (email, password) => {
+  beginSignInGate();
   try {
     const userCredential = await signInWithEmailAndPassword(
       auth,
       email,
       password,
     );
-    return { success: true, user: userCredential.user };
+    const user = userCredential.user;
+    const profileResult = await getUserProfile(user.uid, user);
+    const profile = profileResult.success ? profileResult.data : null;
+    const requires2fa = !!profile?.twoFactorEnabled;
+
+    if (requires2fa) {
+      markPending2fa(user.uid);
+    } else {
+      clearPending2faMark();
+    }
+
+    return {
+      success: true,
+      user,
+      requires2fa,
+      profile,
+    };
   } catch (error) {
+    clearPending2faMark();
     return { success: false, error: getErrorMessage(error.code) };
+  } finally {
+    endSignInGate();
   }
 };
 
@@ -130,6 +158,7 @@ export const signIn = async (email, password) => {
  */
 export const signOut = async () => {
   try {
+    clearPending2faMark();
     await firebaseSignOut(auth);
     return { success: true };
   } catch (error) {

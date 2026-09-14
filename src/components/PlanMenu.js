@@ -72,44 +72,41 @@ const paymentMethodTranslationKey = (methodId) => {
   return "paymentMethodCard";
 };
 
-// ── Lógica mock de pago ──────────────────────────────────────────────────────
+// ── Lógica mock de pago (devuelve claves i18n o null) ────────────────────────
 const CARD_OUTCOMES = {
   4242424242424242: null, // éxito
-  4000000000000002: "Tarjeta rechazada por el banco.",
-  4000000000009995: "Fondos insuficientes en la cuenta.",
-  4000000000000101: "CVV incorrecto. Verifica el código de seguridad.",
-  4000000000000069: "La tarjeta está vencida.",
+  4000000000000002: "cardDeclined",
+  4000000000009995: "cardInsufficientFunds",
+  4000000000000101: "cardCvvWrong",
+  4000000000000069: "cardExpired",
 };
 
 function resolveCard(rawNumber, cvv) {
   const digits = rawNumber.replace(/\s/g, "");
-  if (digits.length < 16) return "Ingresa un número de tarjeta de 16 dígitos.";
+  if (digits.length < 16) return "cardNumberTooShort";
   const known = CARD_OUTCOMES[digits];
-  if (known === undefined)
-    return "Tarjeta no reconocida. Usa los números de prueba.";
+  if (known === undefined) return "cardNotRecognized";
   // special case: 0101 needs CVV 999
-  if (digits === "4000000000000101" && cvv !== "999")
-    return "CVV incorrecto. Verifica el código de seguridad.";
-  return known; // null = success, string = error
+  if (digits === "4000000000000101" && cvv !== "999") return "cardCvvWrong";
+  return known; // null = success, string = i18n key
 }
 
 function resolvePayPal(email, pwd) {
-  if (!email.includes("@")) return "Ingresa un correo electrónico válido.";
-  if (!pwd) return "La contraseña no puede estar vacía.";
-  if (email === "rechazado@test.com")
-    return "Tu cuenta PayPal fue rechazada. Contacta a soporte.";
+  if (!email.includes("@")) return "paypalEmailFormatInvalid";
+  if (!pwd) return "paypalPasswordEmpty";
+  if (email === "rechazado@test.com") return "paypalRejected";
   if (email === "comprador@test.com" && pwd !== "test1234")
-    return "Contraseña incorrecta.";
-  if (email !== "comprador@test.com") return "Cuenta PayPal no encontrada.";
+    return "paypalBadCredentials";
+  if (email !== "comprador@test.com") return "paypalNotFound";
   return null; // éxito
 }
 
 function resolveYape(phone, code) {
   const digits = phone.replace(/\D/g, "");
-  if (digits.length < 9) return "Ingresa un número de celular de 9 dígitos.";
-  if (!code) return "Ingresa el código Yape.";
-  if (digits !== "999999999") return "El número no está registrado en Yape.";
-  if (code !== "123456") return "Código Yape incorrecto. Inténtalo de nuevo.";
+  if (digits.length < 9) return "yapePhoneInvalid";
+  if (!code) return "yapeCodeRequired";
+  if (digits !== "999999999") return "yapePhoneNotRegistered";
+  if (code !== "123456") return "yapeCodeIncorrect";
   return null; // éxito
 }
 
@@ -314,22 +311,19 @@ function PlanMenu({
     // Validación por método
     let fieldError = null;
     if (payMethod === "card") {
-      if (!cardName.trim()) fieldError = "Ingresa el nombre del titular.";
-      else if (expiry.length < 5)
-        fieldError = "Ingresa la fecha de vencimiento (MM/AA).";
-      else if (cvv.length < 3)
-        fieldError = "Ingresa el CVV (mínimo 3 dígitos).";
+      if (!cardName.trim()) fieldError = "cardNameRequired";
+      else if (expiry.length < 5) fieldError = "cardExpiryRequired";
+      else if (cvv.length < 3) fieldError = "cardCvvInvalid";
     } else if (payMethod === "paypal") {
-      if (!ppEmail.trim()) fieldError = "Ingresa tu correo PayPal.";
-      else if (!ppPwd) fieldError = "Ingresa tu contraseña PayPal.";
+      if (!ppEmail.trim()) fieldError = "paypalEmailInvalid";
+      else if (!ppPwd) fieldError = "paypalPasswordRequired";
     } else if (payMethod === "yape") {
-      if (!yapePhone.replace(/\D/g, ""))
-        fieldError = "Ingresa tu número de celular.";
-      else if (!yapeCode) fieldError = "Ingresa el código Yape.";
+      if (!yapePhone.replace(/\D/g, "")) fieldError = "yapePhoneRequired";
+      else if (!yapeCode) fieldError = "yapeCodeRequired";
     }
 
     if (fieldError) {
-      setPayError(fieldError);
+      setPayError(t(fieldError));
       return;
     }
 
@@ -344,7 +338,7 @@ function PlanMenu({
     if (payMethod === "yape") outcome = resolveYape(yapePhone, yapeCode);
 
     if (outcome) {
-      setPayError(outcome);
+      setPayError(t(outcome));
     } else {
       onSelectPlan("personal", selected);
       setView("success");
@@ -361,6 +355,7 @@ function PlanMenu({
     cardNumber,
     onSelectPlan,
     selected,
+    t,
   ]);
 
   // ── Cancelar suscripción ─────────────────────────────────────────────────────
@@ -480,7 +475,7 @@ function PlanMenu({
                 <User color={theme.textMuted} size={16} />
                 <TextInput
                   style={[styles.payInput, inputTypography, { color: theme.text }]}
-                  placeholder="Como aparece en la tarjeta"
+                  placeholder={t("cardNamePlaceholder")}
                   placeholderTextColor={theme.textMuted}
                   value={cardName}
                   onChangeText={(t) => {

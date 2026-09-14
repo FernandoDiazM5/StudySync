@@ -38,10 +38,16 @@ import {
   Plus,
   UserPlus,
   FileText,
+  Image as ImageIcon,
+  Film,
+  Music,
+  Archive,
   CheckSquare,
   Pencil,
   Download,
   Trash2,
+  RotateCcw,
+  FileDown,
   Award,
   Flag,
   CalendarDays,
@@ -58,8 +64,41 @@ import * as firestoreService from "../../services/firestoreService";
 import { listenGroup } from "../../services/firestoreService";
 import TaskItem from "../../components/TaskItem";
 import EmptyState from "../../components/EmptyState";
+import {
+  generateGroupTasksPdfFile,
+  saveGroupTasksPdfToDevice,
+  shareGroupTasksPdf,
+} from "../../utils/exportGroupTasksPdf";
 import GroupAvatar from "../../components/GroupAvatar";
+import GroupColorPicker from "../../components/GroupColorPicker";
 import { initialsFromDisplayName } from "../../utils/avatarInitials";
+import { resolveGroupColor } from "../../utils/groupColors";
+
+function getFileTypeVisual(fileName = "") {
+  const ext = String(fileName).split(".").pop()?.toLowerCase() || "";
+  if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic"].includes(ext)) {
+    return { Icon: ImageIcon, bg: "#EEF2FF", bgDark: "#312E81", color: "#4F46E5" };
+  }
+  if (["pdf"].includes(ext)) {
+    return { Icon: FileText, bg: "#FEE2E2", bgDark: "#7F1D1D", color: "#F87171" };
+  }
+  if (["doc", "docx", "txt", "rtf", "odt", "md"].includes(ext)) {
+    return { Icon: FileText, bg: "#DBEAFE", bgDark: "#1E3A8A", color: "#60A5FA" };
+  }
+  if (["xls", "xlsx", "csv", "ods"].includes(ext)) {
+    return { Icon: FileText, bg: "#DCFCE7", bgDark: "#14532D", color: "#4ADE80" };
+  }
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) {
+    return { Icon: Archive, bg: "#FEF3C7", bgDark: "#78350F", color: "#FBBF24" };
+  }
+  if (["mp3", "wav", "m4a", "aac", "ogg"].includes(ext)) {
+    return { Icon: Music, bg: "#F3E8FF", bgDark: "#581C87", color: "#C084FC" };
+  }
+  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) {
+    return { Icon: Film, bg: "#FCE7F3", bgDark: "#831843", color: "#F472B6" };
+  }
+  return { Icon: FileText, bg: "#F3F4F6", bgDark: "#374151", color: "#9CA3AF" };
+}
 
 // ─── FileCard con efecto flash al llegar desde notificación ───────────────────
 // Los botones de acción se posicionan de forma ABSOLUTA en el lado derecho.
@@ -74,12 +113,13 @@ function FileCard({
   formatUploadDate,
   onOpen,
   onDelete,
+  trashMode = false,
+  daysLeft = 0,
+  onRestore,
+  onPurge,
 }) {
-  const ext = (file.fileName?.split(".").pop()?.toUpperCase() || "FILE").slice(
-    0,
-    4,
-  );
-  // Descarga + eliminar (cualquier miembro del grupo): 36 + 6 gap + 36 + 12 + 8 = 98 px
+  const { Icon, bg, bgDark, color } = getFileTypeVisual(file.fileName);
+  // Descarga + eliminar (o restaurar + purgar): 36 + 6 gap + 36 + 12 + 8 = 98 px
   const rightPadding = 98;
 
   return (
@@ -91,18 +131,33 @@ function FileCard({
           borderColor: theme.border,
           paddingRight: rightPadding,
         },
+        trashMode && {
+          opacity: 0.92,
+          borderStyle: "dashed",
+        },
         highlight && { borderColor: "#4F46E5", borderWidth: 2 },
       ]}
-      onPress={() => onOpen(file)}
+      onPress={() => (trashMode ? onRestore?.(file) : onOpen(file))}
       activeOpacity={0.75}
       accessibilityRole="button"
-      accessibilityLabel={t("fileOpenA11yLabel", { name: file.fileName })}
-      accessibilityHint={t("fileOpenA11yHint")}
+      accessibilityLabel={
+        trashMode
+          ? t("fileRestoreA11yLabel", { name: file.fileName })
+          : t("fileOpenA11yLabel", { name: file.fileName })
+      }
+      accessibilityHint={
+        trashMode ? t("fileRestoreA11yHint") : t("fileOpenA11yHint")
+      }
     >
       {/* Información — ocupa todo el ancho restante sin competir con los botones */}
       <View style={styles.fileInfo}>
-        <View style={styles.fileIcon}>
-          <Text style={styles.fileIconText}>{ext}</Text>
+        <View
+          style={[
+            styles.fileIcon,
+            { backgroundColor: isDark ? bgDark : bg },
+          ]}
+        >
+          <Icon color={color} size={20} strokeWidth={2.2} />
         </View>
         <View style={styles.fileTextBlock}>
           <Text
@@ -120,7 +175,9 @@ function FileCard({
             {file.uploadedByName || file.uploadedBy}
           </Text>
           <Text style={[styles.fileDate, { color: theme.textMuted }]}>
-            {formatUploadDate(file.uploadedAt)}
+            {trashMode
+              ? t("fileTrashDaysLeft", { n: String(daysLeft) })
+              : formatUploadDate(file.uploadedAt)}
           </Text>
         </View>
       </View>
@@ -128,31 +185,71 @@ function FileCard({
       {/* Botones absolutamente posicionados — position:'absolute' los saca del flujo flex,
           garantizando visibilidad en todos los dispositivos sin importar Yoga */}
       <View style={styles.fileActions}>
-        <TouchableOpacity
-          onPress={(e) => {
-            e.stopPropagation?.();
-            onOpen(file);
-          }}
-          style={[
-            styles.actionButton,
-            { backgroundColor: theme.dark ? "#312E81" : "#EEF2FF" },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={t("fileDownloadA11yLabel", { name: file.fileName })}
-        >
-          <Download color="#4F46E5" size={16} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={(e) => {
-            e.stopPropagation?.();
-            onDelete(file);
-          }}
-          style={[styles.actionButton, { backgroundColor: "#FEE2E2" }]}
-          accessibilityRole="button"
-          accessibilityLabel={t("fileDeleteA11yLabel", { name: file.fileName })}
-        >
-          <Trash2 color="#DC2626" size={16} />
-        </TouchableOpacity>
+        {trashMode ? (
+          <>
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onRestore?.(file);
+              }}
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.dark ? "#312E81" : "#EEF2FF" },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t("fileRestoreA11yLabel", {
+                name: file.fileName,
+              })}
+            >
+              <RotateCcw color="#4F46E5" size={16} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onPurge?.(file);
+              }}
+              style={[styles.actionButton, { backgroundColor: "#FEE2E2" }]}
+              accessibilityRole="button"
+              accessibilityLabel={t("filePurgeA11yLabel", {
+                name: file.fileName,
+              })}
+            >
+              <Trash2 color="#DC2626" size={16} />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onOpen(file);
+              }}
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.dark ? "#312E81" : "#EEF2FF" },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t("fileDownloadA11yLabel", {
+                name: file.fileName,
+              })}
+            >
+              <Download color="#4F46E5" size={16} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onDelete(file);
+              }}
+              style={[styles.actionButton, { backgroundColor: "#FEE2E2" }]}
+              accessibilityRole="button"
+              accessibilityLabel={t("fileDeleteA11yLabel", {
+                name: file.fileName,
+              })}
+            >
+              <Trash2 color="#DC2626" size={16} />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -576,9 +673,16 @@ function LeaderPanel({
                       >
                         {m.name?.split(" ").slice(0, 2).join(" ")}
                         {m.id === group.leaderId ? (
-                          <Text style={{ color: "#6366F1", fontSize: 11 }}>
+                          <Text
+                            style={{
+                              color: "#6366F1",
+                              fontSize: 10,
+                              fontWeight: "700",
+                              letterSpacing: 0.3,
+                            }}
+                          >
                             {" "}
-                            ★
+                            · {t("leader")}
                           </Text>
                         ) : null}
                       </Text>
@@ -1056,7 +1160,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
   } = route.params;
   const { user, userProfile } = useAuth();
   const { theme, isDark } = useTheme();
-  const { t } = useAccessibility();
+  const { t, language } = useAccessibility();
   const { uploadGroupFile, uploadGroupAvatar, deleteGroupFile } =
     useFileStorage();
   const insets = useSafeAreaInsets();
@@ -1065,6 +1169,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
   const [files, setFiles] = useState([]);
   const [members, setMembers] = useState([]);
   const [activeTab, setActiveTab] = useState(initialTab || "tareas");
+  const [filesView, setFilesView] = useState("active"); // active | trash
   const filesListRef = useRef(null);
   const [highlightId, setHighlightId] = useState(null);
   // Ref para saber si hay un scroll pendiente al tab archivos
@@ -1088,6 +1193,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPhotoUrl, setEditPhotoUrl] = useState("");
+  const [editColor, setEditColor] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1134,6 +1240,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
     if (!highlightFileId) return;
     setHighlightId(highlightFileId);
     pendingScrollFileId.current = highlightFileId;
+    setFilesView("active");
     if (activeTab !== "archivos") setActiveTab("archivos");
     // highlightTs garantiza re-ejecución aunque el fileId sea el mismo
   }, [highlightFileId, highlightTs]);
@@ -1143,13 +1250,15 @@ export default function GroupDetailsScreen({ route, navigation }) {
   useEffect(() => {
     if (
       activeTab !== "archivos" ||
+      filesView !== "active" ||
       !pendingScrollFileId.current ||
       !files.length
     )
       return;
     const fileId = pendingScrollFileId.current;
     pendingScrollFileId.current = null; // consumir para no repetir
-    const idx = files.findIndex((f) => f.id === fileId);
+    const activeList = files.filter((f) => !f.deletedAt);
+    const idx = activeList.findIndex((f) => f.id === fileId);
     if (idx >= 0) {
       setTimeout(() => {
         filesListRef.current?.scrollToIndex({
@@ -1159,7 +1268,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
         });
       }, 500);
     }
-  }, [activeTab, files.length]);
+  }, [activeTab, filesView, files.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1271,7 +1380,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
       setInviteModalVisible(false);
       Alert.alert(t("invitationSent"), t("invitationSentMsg"));
     } catch (e) {
-      Alert.alert("Error", e.message || "No se pudo enviar la invitación");
+      Alert.alert(t("error"), e.message || t("inviteSendFailed"));
     } finally {
       setInviting(false);
     }
@@ -1320,6 +1429,49 @@ export default function GroupDetailsScreen({ route, navigation }) {
     [t],
   );
 
+  const activeFiles = useMemo(
+    () => files.filter((f) => !f.deletedAt),
+    [files],
+  );
+
+  const trashFiles = useMemo(() => {
+    const now = Date.now();
+    return files
+      .filter((f) => firestoreService.isFileInTrash(f, now))
+      .sort(
+        (a, b) =>
+          new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime(),
+      );
+  }, [files]);
+
+  // Purga automática: >7 días → borrar Storage + Firestore (no se muestran ni restauran)
+  useEffect(() => {
+    if (!groupId || !files.length) return;
+    const expired = files.filter((f) =>
+      firestoreService.isFileTrashExpired(f),
+    );
+    if (!expired.length) return;
+
+    let cancelled = false;
+    (async () => {
+      for (const file of expired) {
+        if (cancelled) return;
+        try {
+          if (file.filePath) {
+            await deleteGroupFile(file.filePath);
+          }
+          await firestoreService.permanentlyDeleteGroupFile(file.id);
+        } catch (e) {
+          console.error("[fileTrash:purge]", e?.message || e);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [files, groupId, deleteGroupFile]);
+
   const handleDeleteFile = useCallback(
     (file) => {
       Alert.alert(t("confirm"), t("deleteFileConfirm"), [
@@ -1329,9 +1481,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteGroupFile(file.filePath);
-              await firestoreService.deleteGroupFile(groupId, file.id);
-              Alert.alert(t("success"), t("fileDeleted"));
+              await firestoreService.softDeleteGroupFile(file.id, user?.uid);
+              Alert.alert(t("success"), t("fileMovedToTrash"));
             } catch (error) {
               Alert.alert(t("error"), error.message);
             }
@@ -1339,7 +1490,56 @@ export default function GroupDetailsScreen({ route, navigation }) {
         },
       ]);
     },
-    [t, deleteGroupFile, groupId],
+    [t, user?.uid],
+  );
+
+  const handleRestoreFile = useCallback(
+    async (file) => {
+      if (firestoreService.isFileTrashExpired(file)) {
+        Alert.alert(t("error"), t("fileTrashExpired"));
+        try {
+          if (file.filePath) await deleteGroupFile(file.filePath);
+          await firestoreService.permanentlyDeleteGroupFile(file.id);
+        } catch {
+          /* noop */
+        }
+        return;
+      }
+      try {
+        await firestoreService.restoreGroupFile(file.id, file);
+        setFilesView("active");
+        Alert.alert(t("success"), t("fileRestored"));
+      } catch (error) {
+        if (error?.message === "FILE_TRASH_EXPIRED") {
+          Alert.alert(t("error"), t("fileTrashExpired"));
+        } else {
+          Alert.alert(t("error"), error.message || t("operationError"));
+        }
+      }
+    },
+    [t, deleteGroupFile],
+  );
+
+  const handlePurgeFile = useCallback(
+    (file) => {
+      Alert.alert(t("confirm"), t("purgeFileConfirm"), [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("deleteForever"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (file.filePath) await deleteGroupFile(file.filePath);
+              await firestoreService.permanentlyDeleteGroupFile(file.id);
+              Alert.alert(t("success"), t("filePurged"));
+            } catch (error) {
+              Alert.alert(t("error"), error.message);
+            }
+          },
+        },
+      ]);
+    },
+    [t, deleteGroupFile],
   );
 
   const handleToggleTaskStatus = async (taskId, currentStatus) => {
@@ -1371,7 +1571,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
           "Usuario",
       });
     } catch (error) {
-      Alert.alert("Error", "No se pudo actualizar la tarea.");
+      Alert.alert(t("error"), t("taskUpdateFailed"));
     }
   };
 
@@ -1396,12 +1596,13 @@ export default function GroupDetailsScreen({ route, navigation }) {
     try {
       await firestoreService.updateTask(taskId, { subtasks: newSubtasks });
     } catch (e) {
-      Alert.alert("Error", "No se pudo guardar las subtareas.");
+      Alert.alert(t("error"), t("subtasksSaveFailed"));
     }
   };
 
   // ── Prioridad + ordenación ────────────────────────────────────────────────
   const [sortBy, setSortBy] = useState("default");
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const handlePriorityChange = async (taskId, priority) => {
     if (!canManage) return;
@@ -1416,7 +1617,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
     try {
       await firestoreService.updateTask(taskId, { priority: priority ?? null });
     } catch (e) {
-      Alert.alert("Error", "No se pudo actualizar la prioridad.");
+      Alert.alert(t("error"), t("priorityUpdateFailed"));
     }
   };
 
@@ -1442,7 +1643,10 @@ export default function GroupDetailsScreen({ route, navigation }) {
           ? 1024 * 1024 * 1024
           : 100 * 1024 * 1024; // 1 GB / 100 MB
         const fileSize = file.size || 0;
-        const totalUsed = files.reduce((sum, f) => sum + (f.fileSize || 0), 0);
+        const totalUsed = activeFiles.reduce(
+          (sum, f) => sum + (f.fileSize || 0),
+          0,
+        );
 
         if (fileSize > MAX_FILE_SIZE) {
           const limitLabel = groupLeaderIsPro ? "50 MB" : "5 MB";
@@ -1502,7 +1706,12 @@ export default function GroupDetailsScreen({ route, navigation }) {
       await new Promise((r) => setTimeout(r, 600));
     } catch (e) {
       console.error("Error uploading file:", e);
-      Alert.alert(t("error"), t("uploadError"));
+      Alert.alert(
+        t("error"),
+        e?.message && !String(e.message).includes("Network request failed")
+          ? e.message
+          : t("uploadError"),
+      );
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -1579,8 +1788,9 @@ export default function GroupDetailsScreen({ route, navigation }) {
 
   const handleOpenEditModal = () => {
     setEditName(group.name || "");
-    setEditDescription(group.description || "");
+    setEditDescription(group.description || group.desc || "");
     setEditPhotoUrl(group.photoURL || "");
+    setEditColor(resolveGroupColor(group));
     setEditModalVisible(true);
   };
 
@@ -1600,7 +1810,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
       );
       setEditPhotoUrl(url);
     } catch (e) {
-      Alert.alert(t("error"), "No se pudo cambiar la foto del grupo");
+      Alert.alert(t("error"), t("groupPhotoFailed"));
     } finally {
       setUploadingPhoto(false);
     }
@@ -1616,13 +1826,17 @@ export default function GroupDetailsScreen({ route, navigation }) {
       await firestoreService.updateGroup(groupId, {
         name: editName.trim(),
         description: editDescription.trim(),
+        desc: editDescription.trim(),
         photoURL: editPhotoUrl || null,
+        color: editColor,
       });
       setGroup((prev) => ({
         ...prev,
         name: editName.trim(),
         description: editDescription.trim(),
+        desc: editDescription.trim(),
         photoURL: editPhotoUrl || null,
+        color: editColor,
       }));
       setEditModalVisible(false);
       Alert.alert(t("success"), t("groupUpdated"));
@@ -1652,6 +1866,82 @@ export default function GroupDetailsScreen({ route, navigation }) {
       if (self) return self;
     }
     return t("unassigned");
+  };
+
+  const handleExportTasksPdf = async () => {
+    if (!tasks.length || exportingPdf) return;
+
+    const labels = {
+      docTitle: t("exportTasksPdfTitle"),
+      groupFallback: t("groups"),
+      exportedAt: t("exportTasksPdfExportedAt"),
+      total: t("exportTasksPdfTotal"),
+      pending: t("pending"),
+      inProgress: t("inProgress"),
+      completed: t("completed"),
+      workProgress: t("workProgress"),
+      colTask: t("exportTasksPdfColTask"),
+      colStatus: t("exportTasksPdfColStatus"),
+      colAssignee: t("exportTasksPdfColAssignee"),
+      colDue: t("exportTasksPdfColDue"),
+      colPriority: t("exportTasksPdfColPriority"),
+      noDate: t("noDate"),
+      unassigned: t("unassigned"),
+      emptyTasks: t("noTasksAssigned"),
+      untitledTask: t("exportTasksPdfUntitled"),
+      subtaskFallback: t("exportTasksPdfSubtask"),
+      priorityHigh: t("priorityHigh"),
+      priorityMedium: t("priorityMedium"),
+      priorityLow: t("priorityLow"),
+      footerNote: t("exportTasksPdfFooter"),
+      shareTitle: t("exportTasksPdfShareTitle"),
+      saveToFilesTitle: t("exportTasksPdfSaveToFilesTitle"),
+    };
+
+    const runExport = async (mode) => {
+      setExportingPdf(true);
+      try {
+        const locale = language === "en" ? "en-US" : "es-PE";
+        const { uri, fileName, base64 } = await generateGroupTasksPdfFile({
+          groupName: group?.name || t("groups"),
+          tasks: sortedTasks,
+          getAssigneeName: getMemberName,
+          locale,
+          labels,
+        });
+
+        if (mode === "save") {
+          const result = await saveGroupTasksPdfToDevice(
+            uri,
+            fileName,
+            labels,
+            base64,
+          );
+          if (result.cancelled) return;
+          Alert.alert(t("success"), t("exportTasksPdfSavedOk"));
+          return;
+        }
+
+        await shareGroupTasksPdf(uri, labels);
+      } catch (e) {
+        console.error("[exportTasksPdf]", e);
+        Alert.alert(t("error"), e?.message || t("exportTasksPdfFailed"));
+      } finally {
+        setExportingPdf(false);
+      }
+    };
+
+    Alert.alert(t("exportTasksPdfChooseTitle"), t("exportTasksPdfChooseMsg"), [
+      {
+        text: t("exportTasksPdfSaveAction"),
+        onPress: () => runExport("save"),
+      },
+      {
+        text: t("exportTasksPdfShareAction"),
+        onPress: () => runExport("share"),
+      },
+      { text: t("cancel"), style: "cancel" },
+    ]);
   };
 
   if (loading || !group) {
@@ -1693,14 +1983,15 @@ export default function GroupDetailsScreen({ route, navigation }) {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessible={true}
           accessibilityRole="button"
-          accessibilityLabel="Volver"
-          accessibilityHint="Doble toque para regresar"
+          accessibilityLabel={t("back")}
+          accessibilityHint={t("doubleTapBack")}
         >
           <ChevronLeft color={theme.textSecondary} size={24} />
         </TouchableOpacity>
         <GroupAvatar
           photoURL={group.photoURL}
           name={group.name}
+          color={group.color}
           size={38}
           borderRadius={10}
         />
@@ -1726,8 +2017,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
             ]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityRole="button"
-            accessibilityLabel="Editar grupo"
-            accessibilityHint="Doble toque para editar el nombre y descripción"
+            accessibilityLabel={t("a11yEditGroup")}
+            accessibilityHint={t("a11yEditGroupHint")}
           >
             <Pencil color="#4F46E5" size={20} />
           </TouchableOpacity>
@@ -1817,6 +2108,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.sortChipRow}
+                    style={{ flex: 1 }}
                   >
                     {[
                       { key: "default", icon: null, labelKey: "sortByDefault" },
@@ -1895,6 +2187,33 @@ export default function GroupDetailsScreen({ route, navigation }) {
                   </ScrollView>
                 </View>
 
+                <TouchableOpacity
+                  onPress={handleExportTasksPdf}
+                  disabled={exportingPdf}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.exportPdfBtn,
+                    {
+                      backgroundColor: "#4F46E5",
+                      opacity: exportingPdf ? 0.75 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("exportTasksPdfA11y")}
+                  accessibilityHint={t("exportTasksPdfA11yHint")}
+                >
+                  {exportingPdf ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <FileDown color="#FFFFFF" size={18} strokeWidth={2.3} />
+                  )}
+                  <Text style={styles.exportPdfBtnText}>
+                    {exportingPdf
+                      ? t("exportTasksPdfGenerating")
+                      : t("exportTasksPdfButton")}
+                  </Text>
+                </TouchableOpacity>
+
                 {/* ── Lista de tareas ── */}
                 <FlatList
                   data={sortedTasks}
@@ -1921,23 +2240,23 @@ export default function GroupDetailsScreen({ route, navigation }) {
                       }
                       onDelete={(taskId, taskTitle) => {
                         Alert.alert(
-                          t("confirm") || "Confirmar",
-                          `¿Eliminar la tarea "${taskTitle}"?`,
+                          t("confirm"),
+                          t("deleteTaskConfirmNamed", { title: taskTitle }),
                           [
                             {
-                              text: t("cancel") || "Cancelar",
+                              text: t("cancel"),
                               style: "cancel",
                             },
                             {
-                              text: t("delete") || "Eliminar",
+                              text: t("delete"),
                               style: "destructive",
                               onPress: async () => {
                                 try {
                                   await firestoreService.deleteTask(taskId);
                                 } catch (e) {
                                   Alert.alert(
-                                    "Error",
-                                    "No se pudo eliminar la tarea",
+                                    t("error"),
+                                    t("deleteTaskFailed"),
                                   );
                                 }
                               },
@@ -1961,8 +2280,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
                         }
                         activeOpacity={0.7}
                         accessibilityRole="button"
-                        accessibilityLabel="Crear tarea"
-                        accessibilityHint="Doble toque para crear una nueva tarea"
+                        accessibilityLabel={t("a11yCreateTask")}
+                        accessibilityHint={t("a11yCreateTaskHint")}
                       >
                         <Plus color="#4F46E5" size={16} />
                         <Text style={styles.addButtonText}>
@@ -1980,7 +2299,7 @@ export default function GroupDetailsScreen({ route, navigation }) {
         {/* ARCHIVOS TAB */}
         {activeTab === "archivos" && (
           <>
-            {files.length === 0 ? (
+            {activeFiles.length === 0 && trashFiles.length === 0 ? (
               <EmptyState
                 icon={FileText}
                 title={t("noDocuments")}
@@ -1989,61 +2308,187 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 onAction={uploading ? null : handleFileUpload}
               />
             ) : (
-              <FlatList
-                ref={filesListRef}
-                data={files}
-                keyExtractor={(item) => item.id}
-                onScrollToIndexFailed={() => {}}
-                onScrollBeginDrag={() => setHighlightId(null)}
-                renderItem={({ item: file }) => (
-                  <FileCard
-                    file={file}
-                    theme={theme}
-                    isDark={isDark}
-                    highlight={file.id === highlightId}
-                    t={t}
-                    formatUploadDate={formatUploadDate}
-                    onOpen={(f) => {
-                      setHighlightId(null);
-                      handleOpenFile(f);
-                    }}
-                    onDelete={(f) => {
-                      setHighlightId(null);
-                      handleDeleteFile(f);
-                    }}
-                  />
-                )}
-                contentContainerStyle={[
-                  styles.listContent,
-                  { paddingBottom: insets.bottom + 100 },
-                ]}
-                showsVerticalScrollIndicator={false}
-                ListFooterComponent={
-                  <AppButton
+              <View style={{ flex: 1 }}>
+                <View
+                  style={[
+                    styles.filesViewToggle,
+                    {
+                      backgroundColor: theme.dark ? "#111827" : "#EEF2FF",
+                      borderColor: theme.dark ? "#374151" : "#C7D2FE",
+                    },
+                  ]}
+                >
+                  <TouchableOpacity
                     style={[
-                      styles.addButtonDashed,
-                      { borderColor: theme.border },
+                      styles.filesViewToggleBtn,
+                      filesView === "active" && styles.filesViewToggleBtnActive,
                     ]}
-                    onPress={uploading ? undefined : handleFileUpload}
-                    disabled={uploading}
-                    accessibilityLabel={
-                      uploading
-                        ? t("uploadFileFooterA11yUploading")
-                        : t("uploadFileFooterA11yIdle")
-                    }
-                    accessibilityHint={t("uploadFileFooterHint")}
+                    onPress={() => setFilesView("active")}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: filesView === "active" }}
+                    accessibilityLabel={t("filesViewActive")}
                   >
+                    <FileText
+                      size={15}
+                      color={filesView === "active" ? "#FFFFFF" : theme.textMuted}
+                      strokeWidth={2.3}
+                    />
                     <Text
                       style={[
-                        styles.addButtonDashedText,
-                        { color: theme.textSecondary },
+                        styles.filesViewToggleText,
+                        {
+                          color:
+                            filesView === "active"
+                              ? "#FFFFFF"
+                              : theme.textMuted,
+                        },
                       ]}
+                      numberOfLines={1}
                     >
-                      {uploading ? t("uploading") : t("uploadFile")}
+                      {t("filesViewActive")}
                     </Text>
-                  </AppButton>
-                }
-              />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.filesViewToggleBtn,
+                      filesView === "trash" && styles.filesViewToggleBtnActive,
+                    ]}
+                    onPress={() => setFilesView("trash")}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: filesView === "trash" }}
+                    accessibilityLabel={t("fileTrashTitle")}
+                  >
+                    <Trash2
+                      size={15}
+                      color={filesView === "trash" ? "#FFFFFF" : theme.textMuted}
+                      strokeWidth={2.3}
+                    />
+                    <Text
+                      style={[
+                        styles.filesViewToggleText,
+                        {
+                          color:
+                            filesView === "trash"
+                              ? "#FFFFFF"
+                              : theme.textMuted,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {t("fileTrashTitle")}
+                      {trashFiles.length > 0 ? ` · ${trashFiles.length}` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {filesView === "active" ? (
+                  activeFiles.length === 0 ? (
+                    <EmptyState
+                      icon={FileText}
+                      title={t("noDocuments")}
+                      message={t("filesEmptyActiveHint")}
+                      actionText={uploading ? t("uploading") : t("uploadFile")}
+                      onAction={uploading ? null : handleFileUpload}
+                    />
+                  ) : (
+                    <FlatList
+                      ref={filesListRef}
+                      data={activeFiles}
+                      keyExtractor={(item) => item.id}
+                      onScrollToIndexFailed={() => {}}
+                      onScrollBeginDrag={() => setHighlightId(null)}
+                      renderItem={({ item: file }) => (
+                        <FileCard
+                          file={file}
+                          theme={theme}
+                          isDark={isDark}
+                          highlight={file.id === highlightId}
+                          t={t}
+                          formatUploadDate={formatUploadDate}
+                          onOpen={(f) => {
+                            setHighlightId(null);
+                            handleOpenFile(f);
+                          }}
+                          onDelete={(f) => {
+                            setHighlightId(null);
+                            handleDeleteFile(f);
+                          }}
+                        />
+                      )}
+                      contentContainerStyle={[
+                        styles.listContent,
+                        { paddingBottom: insets.bottom + 100 },
+                      ]}
+                      showsVerticalScrollIndicator={false}
+                      ListFooterComponent={
+                        <AppButton
+                          style={[
+                            styles.addButtonDashed,
+                            { borderColor: theme.border },
+                          ]}
+                          onPress={uploading ? undefined : handleFileUpload}
+                          disabled={uploading}
+                          accessibilityLabel={
+                            uploading
+                              ? t("uploadFileFooterA11yUploading")
+                              : t("uploadFileFooterA11yIdle")
+                          }
+                          accessibilityHint={t("uploadFileFooterHint")}
+                        >
+                          <Text
+                            style={[
+                              styles.addButtonDashedText,
+                              { color: theme.textSecondary },
+                            ]}
+                          >
+                            {uploading ? t("uploading") : t("uploadFile")}
+                          </Text>
+                        </AppButton>
+                      }
+                    />
+                  )
+                ) : trashFiles.length === 0 ? (
+                  <EmptyState
+                    icon={Trash2}
+                    title={t("fileTrashTitle")}
+                    message={t("fileTrashEmpty")}
+                  />
+                ) : (
+                  <FlatList
+                    data={trashFiles}
+                    keyExtractor={(item) => `trash-${item.id}`}
+                    renderItem={({ item: file }) => (
+                      <FileCard
+                        file={file}
+                        theme={theme}
+                        isDark={isDark}
+                        highlight={false}
+                        t={t}
+                        formatUploadDate={formatUploadDate}
+                        trashMode
+                        daysLeft={firestoreService.getFileTrashDaysLeft(file)}
+                        onRestore={handleRestoreFile}
+                        onPurge={handlePurgeFile}
+                      />
+                    )}
+                    ListHeaderComponent={
+                      <Text
+                        style={[
+                          styles.trashSectionHint,
+                          { color: theme.textMuted, marginBottom: 10 },
+                        ]}
+                      >
+                        {t("fileTrashHint")}
+                      </Text>
+                    }
+                    contentContainerStyle={[
+                      styles.listContent,
+                      { paddingBottom: insets.bottom + 100 },
+                    ]}
+                    showsVerticalScrollIndicator={false}
+                  />
+                )}
+              </View>
             )}
           </>
         )}
@@ -2186,8 +2631,11 @@ export default function GroupDetailsScreen({ route, navigation }) {
                           },
                         ]}
                         accessibilityRole="button"
-                        accessibilityLabel={`Expulsar a ${getProfileName(member) || t("userFallback")}`}
-                        accessibilityHint="Doble toque para eliminar este miembro del grupo"
+                        accessibilityLabel={t("a11yKickMember", {
+                          name:
+                            getProfileName(member) || t("userFallback"),
+                        })}
+                        accessibilityHint={t("a11yRemoveMemberHint")}
                       >
                         <UserMinus size={14} color="#EF4444" strokeWidth={2} />
                       </TouchableOpacity>
@@ -2208,8 +2656,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
                   onPress={handleInviteMember}
                   activeOpacity={0.7}
                   accessibilityRole="button"
-                  accessibilityLabel="Invitar miembro"
-                  accessibilityHint="Doble toque para invitar a alguien al grupo"
+                  accessibilityLabel={t("a11yInviteMember")}
+                  accessibilityHint={t("a11yInviteMemberHint")}
                 >
                   <UserPlus color="#4F46E5" size={16} />
                   <Text style={styles.addButtonText}>{t("inviteMembers")}</Text>
@@ -2254,8 +2702,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
             })}
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel="Abrir chat"
-          accessibilityHint="Doble toque para abrir el chat del grupo"
+          accessibilityLabel={t("a11yOpenChat")}
+          accessibilityHint={t("a11yOpenChatHint")}
         >
           <MessageSquare color="#FFFFFF" size={20} />
           <Text style={styles.chatButtonText}>{t("chat")}</Text>
@@ -2288,8 +2736,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 disabled={uploadingPhoto || saving}
                 style={styles.photoPickerBtn}
                 accessibilityRole="button"
-                accessibilityLabel="Cambiar foto del grupo"
-                accessibilityHint="Doble toque para seleccionar una imagen"
+                accessibilityLabel={t("a11yChangeGroupPhoto")}
+                accessibilityHint={t("a11yChangeGroupPhotoHint")}
               >
                 {uploadingPhoto ? (
                   <View style={styles.photoPickerPlaceholder}>
@@ -2342,8 +2790,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 placeholder={t("groupNamePlaceholder2")}
                 placeholderTextColor={theme.textMuted}
                 editable={!saving}
-                accessibilityLabel="Nombre del grupo"
-                accessibilityHint="Ingresa el nombre del grupo"
+                accessibilityLabel={t("groupName")}
+                accessibilityHint={t("a11yGroupNameHint")}
               />
               <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>
                 {t("groupDescLabel")}
@@ -2365,9 +2813,17 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 placeholderTextColor={theme.textMuted}
                 multiline
                 editable={!saving}
-                accessibilityLabel="Descripción del grupo"
-                accessibilityHint="Ingresa una descripción para el grupo"
+                accessibilityLabel={t("groupDescription")}
+                accessibilityHint={t("a11yGroupDescHint")}
               />
+              <View style={{ marginBottom: 16 }}>
+                <GroupColorPicker
+                  label={t("groupColorLabel")}
+                  value={editColor}
+                  onChange={setEditColor}
+                  disabled={saving}
+                />
+              </View>
               <View style={styles.modalActions}>
                 <Pressable
                   style={({ pressed }) => [
@@ -2385,8 +2841,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     right: 10,
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="Cancelar"
-                  accessibilityHint="Doble toque para cancelar la edición"
+                  accessibilityLabel={t("cancel")}
+                  accessibilityHint={t("a11yCancelEditHint")}
                 >
                   <Text style={[styles.modalCancelText, { color: theme.text }]}>
                     {t("cancel")}
@@ -2409,8 +2865,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
                     right: 10,
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="Guardar cambios del grupo"
-                  accessibilityHint="Doble toque para guardar los cambios del grupo"
+                  accessibilityLabel={t("a11ySaveGroupChanges")}
+                  accessibilityHint={t("a11ySaveGroupChangesHint")}
                 >
                   <Text style={styles.modalSendText}>
                     {saving ? t("loading") : t("save")}
@@ -2457,8 +2913,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
               autoCapitalize="none"
               autoCorrect={false}
               editable={!inviting}
-              accessibilityLabel="Correo del invitado"
-              accessibilityHint="Ingresa el correo electrónico del usuario a invitar"
+              accessibilityLabel={t("a11yInviteEmail")}
+              accessibilityHint={t("a11yInviteEmailHint")}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -2469,8 +2925,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 onPress={() => setInviteModalVisible(false)}
                 disabled={inviting}
                 accessibilityRole="button"
-                accessibilityLabel="Cancelar"
-                accessibilityHint="Doble toque para cancelar la invitación"
+                accessibilityLabel={t("cancel")}
+                accessibilityHint={t("a11yCancelInviteHint")}
               >
                 <Text style={[styles.modalCancelText, { color: theme.text }]}>
                   {t("cancel")}
@@ -2485,8 +2941,8 @@ export default function GroupDetailsScreen({ route, navigation }) {
                 onPress={handleSendInvitation}
                 disabled={inviting}
                 accessibilityRole="button"
-                accessibilityLabel="Enviar invitación"
-                accessibilityHint="Doble toque para enviar la invitación al usuario"
+                accessibilityLabel={t("a11ySendInvite")}
+                accessibilityHint={t("a11ySendInviteHint")}
               >
                 <Text style={styles.modalSendText}>
                   {inviting ? t("loading") : t("send")}
@@ -2574,6 +3030,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     flexShrink: 0,
+  },
+  exportPdfBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  exportPdfBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   sortChipRow: {
     flexDirection: "row",
@@ -2678,6 +3150,35 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 16,
   },
+  filesViewToggle: {
+    flexDirection: "row",
+    marginBottom: 12,
+    padding: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  filesViewToggleBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+  },
+  filesViewToggleBtnActive: {
+    backgroundColor: "#4F46E5",
+  },
+  filesViewToggleText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  trashSectionHint: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
   // File Card
   fileCard: {
     flexDirection: "row",
@@ -2709,19 +3210,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   fileIcon: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 10,
-    backgroundColor: "#FEE2E2",
     justifyContent: "center",
     alignItems: "center",
     flexShrink: 0,
-  },
-  fileIconText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#DC2626",
-    letterSpacing: 0.5,
+    overflow: "hidden",
   },
   fileName: {
     fontSize: 13,

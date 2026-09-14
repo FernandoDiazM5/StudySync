@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import Text from "./AppText";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAccessibility } from "../contexts/AccessibilityContext";
 
 /**
  * SwipeableRow — Envuelve cualquier contenido y revela botones al deslizar.
@@ -30,9 +31,11 @@ export default function SwipeableRow({
   actions = [],
   enabled = true,
   actionWidth = 76,
+  actionsBorderRadius = 10,
   onOpen,
 }) {
   const { theme, isDark } = useTheme();
+  const { t } = useAccessibility();
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpen = useRef(false);
 
@@ -136,7 +139,7 @@ export default function SwipeableRow({
       {/* Panel de acciones — queda detrás del contenido */}
       <View style={[styles.actionsContainer, { width: totalActionsWidth }]}>
         {/* Wrapper con overflow:hidden para recortar las esquinas redondeadas */}
-        <View style={styles.actionsWrapper}>
+        <View style={[styles.actionsWrapper, { borderRadius: actionsBorderRadius }]}>
           {actions.map((action, index) => {
             const isFirst = index === 0;
             const isLast = index === actions.length - 1;
@@ -157,7 +160,9 @@ export default function SwipeableRow({
                 accessible={true}
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
-                accessibilityHint={`Doble toque para ${action.label.toLowerCase()}`}
+                accessibilityHint={t("a11ySwipeActionHint", {
+                  action: String(action.label || "").toLowerCase(),
+                })}
               >
                 {/* Reflejo superior sutil para dar profundidad */}
                 <View style={styles.shineOverlay} />
@@ -203,18 +208,18 @@ const styles = StyleSheet.create({
   },
 
   // ── Panel de acciones ──────────────────────────────────────────
+  // Llena toda la altura del contenido (sin inset fijo). El espaciado
+  // entre filas debe vivir FUERA de SwipeableRow (gap o margin en un wrapper).
   actionsContainer: {
     position: "absolute",
     right: 0,
-    // top: 0, bottom: 8 → alineado exacto con el card (que tiene marginBottom: 8)
     top: 0,
-    bottom: 8,
+    bottom: 0,
     paddingRight: 4,
   },
   actionsWrapper: {
     flex: 1,
     flexDirection: "row",
-    borderRadius: 10,
     overflow: "hidden",
   },
   actionButton: {

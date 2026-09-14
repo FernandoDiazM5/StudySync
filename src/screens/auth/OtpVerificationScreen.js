@@ -22,6 +22,7 @@ import { useAccessibility } from '../../contexts/AccessibilityContext';
 import { ChevronLeft, Mail, RefreshCw, CheckCircle } from 'lucide-react-native';
 import { verifyOtp, sendOtp, clearOtp } from '../../services/otpService';
 import { registerUser } from '../../services/authService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const CODE_LENGTH  = 6;
 const RESEND_DELAY = 60; // segundos antes de poder reenviar
@@ -39,8 +40,16 @@ const shadow = (color, opacity, radius, offsetY, elevation) =>
   });
 
 export default function OtpVerificationScreen({ navigation, route }) {
-  const { email, password, name, phone } = route.params;
+  const {
+    email,
+    password,
+    name,
+    phone,
+    mode = 'register',
+  } = route.params || {};
+  const isLogin2fa = mode === 'login';
   const { t } = useAccessibility();
+  const { completePending2fa, cancelPending2fa } = useAuth();
 
   // ── Estado ────────────────────────────────────────────────
   const [digits, setDigits]         = useState(Array(CODE_LENGTH).fill(''));
@@ -140,14 +149,15 @@ export default function OtpVerificationScreen({ navigation, route }) {
   const handleVerify = async (code) => {
     const finalCode = code || digits.join('');
     if (finalCode.length < CODE_LENGTH) {
-      setError('Ingresa los 6 dígitos del código.');
+      setError(t('otpEnterAllDigits') || 'Ingresa los 6 dígitos del código.');
       return;
     }
 
     setVerifying(true);
     setError('');
 
-    const result = await verifyOtp(email, finalCode);
+    const purpose = isLogin2fa ? 'login' : 'register';
+    const result = await verifyOtp(email, finalCode, { purpose });
 
     if (!result.success) {
       setVerifying(false);
@@ -155,23 +165,28 @@ export default function OtpVerificationScreen({ navigation, route }) {
       triggerShake();
 
       if (result.expired) {
-        // Limpiar cajas para que el usuario pida un nuevo código
         setDigits(Array(CODE_LENGTH).fill(''));
         inputRefs.current[0]?.current?.focus();
       }
       return;
     }
 
-    // OTP válido → crear cuenta
     setSuccess(true);
     triggerSuccess();
 
+    if (isLogin2fa) {
+      await completePending2fa();
+      setVerifying(false);
+      return;
+    }
+
+    // OTP válido → crear cuenta
     const regResult = await registerUser(email, password, name, phone);
     setVerifying(false);
 
     if (!regResult.success) {
       setSuccess(false);
-      setError(regResult.error || 'No se pudo crear la cuenta. Intenta de nuevo.');
+      setError(regResult.error || t('otpCreateFailed'));
       triggerShake();
     }
     // Si fue exitoso, AuthContext detectará el nuevo usuario y navegará automáticamente.
@@ -184,7 +199,8 @@ export default function OtpVerificationScreen({ navigation, route }) {
     setError('');
     setDigits(Array(CODE_LENGTH).fill(''));
 
-    const result = await sendOtp(email, name);
+    const purpose = isLogin2fa ? 'login' : 'register';
+    const result = await sendOtp(email, name, { purpose });
     setLoading(false);
 
     if (!result.success) {
@@ -195,6 +211,16 @@ export default function OtpVerificationScreen({ navigation, route }) {
     setCanResend(false);
     setResendTimer(RESEND_DELAY);
     inputRefs.current[0]?.current?.focus();
+  };
+
+  const handleBack = async () => {
+    const purpose = isLogin2fa ? 'login' : 'register';
+    await clearOtp(email, { purpose });
+    if (isLogin2fa) {
+      await cancelPending2fa();
+      return;
+    }
+    navigation.goBack();
   };
 
   // ── Formato mm:ss del timer ───────────────────────────────
@@ -215,12 +241,9 @@ export default function OtpVerificationScreen({ navigation, route }) {
         <View style={styles.card}>
           {/* Botón Volver */}
           <AppButton
-            onPress={() => {
-              clearOtp(email);
-              navigation.goBack();
-            }}
+            onPress={handleBack}
             style={styles.backButton}
-            accessibilityLabel="Volver al registro"
+            accessibilityLabel={isLogin2fa ? t('back') : t('backToRegister')}
           >
             <ChevronLeft color="#9CA3AF" size={24} />
           </AppButton>
@@ -234,15 +257,20 @@ export default function OtpVerificationScreen({ navigation, route }) {
           </View>
 
           <Text style={styles.title}>
-            {success ? '¡Cuenta creada!' : 'Verifica tu correo'}
+            {success
+              ? (isLogin2fa ? t('twoFactorSuccessTitle') : t('otpAccountCreated'))
+              : (isLogin2fa ? t('twoFactorTitle') : t('otpVerifyEmail'))}
           </Text>
           <Text style={styles.subtitle}>
             {success
-              ? 'Tu cuenta ha sido creada exitosamente.'
-              : `Ingresa el código de 6 dígitos que enviamos a`}
+              ? (isLogin2fa ? t('twoFactorSuccessMsg') : t('otpAccountCreatedMsg'))
+              : (isLogin2fa ? t('twoFactorEnterCode') : t('otpEnterCodeSent'))}
           </Text>
           {!success && (
             <Text style={styles.emailLabel} numberOfLines={1}>{email}</Text>
+          )}
+          {!success && (
+            <Text style={styles.validityHint}>{t("otpCodeValidMinutes")}</Text>
           )}
 
           {/* Cajas de dígitos */}
@@ -270,7 +298,7 @@ export default function OtpVerificationScreen({ navigation, route }) {
                     textAlign="center"
                     selectTextOnFocus
                     editable={!verifying && !success}
-                    accessibilityLabel={`Dígito ${i + 1} del código`}
+                    accessibilityLabel={t('otpDigitA11y', { n: String(i + 1) })}
                   />
                 ))}
               </Animated.View>
@@ -289,17 +317,17 @@ export default function OtpVerificationScreen({ navigation, route }) {
                 onPress={() => handleVerify()}
                 disabled={!codeComplete || verifying}
                 activeOpacity={0.8}
-                accessibilityLabel="Verificar código"
+                accessibilityLabel={t('otpVerifyCode')}
               >
                 {verifying
                   ? <ActivityIndicator color="#FFFFFF" />
-                  : <Text style={styles.verifyBtnText}>Verificar código</Text>
+                  : <Text style={styles.verifyBtnText}>{t('otpVerifyCode')}</Text>
                 }
               </AppButton>
 
               {/* Reenviar */}
               <View style={styles.resendRow}>
-                <Text style={styles.resendLabel}>¿No recibiste el código? </Text>
+                <Text style={styles.resendLabel}>{t('otpDidntReceive')} </Text>
                 {canResend ? (
                   <TouchableOpacity
                     onPress={handleResend}
@@ -311,13 +339,13 @@ export default function OtpVerificationScreen({ navigation, route }) {
                       : (
                         <View style={styles.resendBtn}>
                           <RefreshCw color="#4F46E5" size={13} />
-                          <Text style={styles.resendBtnText}>Reenviar</Text>
+                          <Text style={styles.resendBtnText}>{t('otpResend')}</Text>
                         </View>
                       )
                     }
                   </TouchableOpacity>
                 ) : (
-                  <Text style={styles.timerText}>Reenviar en {timerLabel}</Text>
+                  <Text style={styles.timerText}>{t('otpResendIn', { n: timerLabel })}</Text>
                 )}
               </View>
             </>
@@ -386,9 +414,16 @@ const styles = StyleSheet.create({
     fontWeight  : '700',
     color       : '#4F46E5',
     marginTop   : 2,
-    marginBottom: 28,
+    marginBottom: 6,
     textAlign   : 'center',
     maxWidth    : '90%',
+  },
+  validityHint: {
+    fontSize    : 12,
+    color       : '#9CA3AF',
+    textAlign   : 'center',
+    marginBottom: 22,
+    lineHeight  : 18,
   },
   codeRow: {
     flexDirection: 'row',

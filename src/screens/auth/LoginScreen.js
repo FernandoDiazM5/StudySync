@@ -31,6 +31,8 @@ const shadow = (color, opacity, radius, offsetY, elevation) =>
 import { Eye, EyeOff } from "lucide-react-native";
 import LogoApp from "../../../assets/logo_app.svg";
 import { signIn } from "../../services/authService";
+import { sendOtp } from "../../services/otpService";
+import { useAuth } from "../../contexts/AuthContext";
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
 import { useAccessibility } from "../../contexts/AccessibilityContext";
@@ -89,6 +91,7 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const { t } = useAccessibility();
+  const { ensurePending2fa, cancelPending2fa } = useAuth();
   const scrollRef = useRef(null);
   const [kbPad, setKbPad] = useState(0);
 
@@ -112,17 +115,43 @@ export default function LoginScreen({ navigation }) {
     setErrorMsg("");
 
     if (!email.trim() || !password.trim()) {
-      setErrorMsg("Por favor completa todos los campos.");
+      setErrorMsg(t("completeAllFields") || "Por favor completa todos los campos.");
       return;
     }
 
     setLoading(true);
     const result = await signIn(email.trim(), password);
-    setLoading(false);
 
     if (!result.success) {
+      setLoading(false);
       setErrorMsg(result.error);
+      return;
     }
+
+    if (result.requires2fa) {
+      ensurePending2fa?.(result.user.uid);
+      const otpResult = await sendOtp(
+        email.trim(),
+        result.profile?.name || "",
+        { purpose: "login" },
+      );
+      setLoading(false);
+
+      if (!otpResult.success) {
+        await cancelPending2fa?.();
+        setErrorMsg(otpResult.error || t("twoFactorSendFailed"));
+        return;
+      }
+
+      navigation.navigate("OtpVerification", {
+        mode: "login",
+        email: email.trim(),
+        name: result.profile?.name || email.trim().split("@")[0],
+      });
+      return;
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -141,7 +170,7 @@ export default function LoginScreen({ navigation }) {
 
         <WaveText />
         <Text style={styles.subtitle}>
-          Colaboración académica, sin distracciones.
+          {t('loginTagline')}
         </Text>
 
         {/* Banner de error */}
@@ -164,8 +193,8 @@ export default function LoginScreen({ navigation }) {
               autoCorrect={false}
               value={email}
               onChangeText={setEmail}
-              accessibilityLabel="Correo electrónico"
-              accessibilityHint="Ingresa tu correo universitario"
+              accessibilityLabel={t("email")}
+              accessibilityHint={t("a11yEmailUniHint")}
             />
           </View>
 
@@ -179,15 +208,17 @@ export default function LoginScreen({ navigation }) {
                 secureTextEntry={!showPwd}
                 value={password}
                 onChangeText={setPassword}
-                accessibilityLabel="Contraseña"
-                accessibilityHint="Ingresa tu contraseña"
+                accessibilityLabel={t("password")}
+                accessibilityHint={t("a11yPasswordHint")}
               />
               <AppButton
                 style={styles.eyeBtn}
-                overrideText={showPwd ? 'Ocultar Contraseña' : 'Mostrar Contraseña'}
+                overrideText={showPwd ? t("hidePassword") : t("showPassword")}
                 onPress={() => setShowPwd((v) => !v)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityHint={showPwd ? 'Doble toque para ocultar la contraseña' : 'Doble toque para mostrar la contraseña'}
+                accessibilityHint={
+                  showPwd ? t("hidePasswordHint") : t("showPasswordHint")
+                }
               >
                 {showPwd
                   ? <EyeOff color="#9CA3AF" size={18} />
@@ -201,8 +232,8 @@ export default function LoginScreen({ navigation }) {
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.8}
-            accessibilityLabel="Iniciar sesión"
-            accessibilityHint="Doble toque para ingresar a tu cuenta"
+            accessibilityLabel={t("a11yLogin")}
+            accessibilityHint={t("a11yLoginHint")}
             accessibilityState={{ disabled: loading }}
           >
             {loading ? (
@@ -216,8 +247,8 @@ export default function LoginScreen({ navigation }) {
         <AppButton
           onPress={() => navigation.navigate("ForgotPassword")}
           style={styles.forgotLink}
-          accessibilityLabel="Recuperar contraseña"
-          accessibilityHint="Doble toque para recuperar tu contraseña"
+          accessibilityLabel={t("a11yForgotPassword")}
+          accessibilityHint={t("a11yForgotPasswordHint")}
         >
           <Text style={styles.forgotText}>{t('forgotPassword')}</Text>
         </AppButton>
@@ -225,8 +256,8 @@ export default function LoginScreen({ navigation }) {
         <AppButton
           onPress={() => navigation.navigate("Register")}
           style={styles.registerLink}
-          accessibilityLabel="Ir a registro"
-          accessibilityHint="Doble toque para crear una cuenta nueva"
+          accessibilityLabel={t("a11yGoRegister")}
+          accessibilityHint={t("a11yGoRegisterHint")}
         >
           <Text style={styles.registerText}>{t('register')}</Text>
         </AppButton>

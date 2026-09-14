@@ -175,8 +175,8 @@ export default function MessagesListScreen({ navigation }) {
         activeOpacity={0.7}
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`Chat: ${group.name}${isUnread ? ", mensaje sin leer" : ""}`}
-        accessibilityHint="Doble toque para abrir el chat"
+        accessibilityLabel={`${t("a11yChatGroup", { name: group.name })}${isUnread ? t("a11yChatUnread") : ""}`}
+        accessibilityHint={t("a11yOpenChatListHint")}
       >
         <View style={s.row}>
           <View style={s.leftSection}>
@@ -184,10 +184,12 @@ export default function MessagesListScreen({ navigation }) {
               key={`gav-${avatarRenderTick}-${group.id}-${String(group.photoURL || "").trim()}-${lastStamp}`}
               photoURL={group.photoURL}
               name={group.name}
+              color={group.color}
               size={44}
+              circular
               style={
                 isUnread
-                  ? { borderWidth: 2, borderColor: "#4F46E5" }
+                  ? { borderWidth: 2, borderColor: group.color || "#4F46E5" }
                   : undefined
               }
             />
@@ -271,7 +273,7 @@ export default function MessagesListScreen({ navigation }) {
           data={sortedGroups}
           keyExtractor={(item) => item.id}
           renderItem={renderGroupChat}
-          extraData={{ lastMessages, typingGroups, unreadCounts }}
+          extraData={{ lastMessages, typingGroups, unreadCounts, isDark: theme.dark }}
           removeClippedSubviews={false}
           contentContainerStyle={[
             s.list,
@@ -282,10 +284,10 @@ export default function MessagesListScreen({ navigation }) {
             <View style={s.emptyState}>
               <MessageSquare color={theme.textMuted} size={52} />
               <Text style={[s.emptyTitle, { color: theme.text }]}>
-                Sin mensajes
+                {t("noMessages")}
               </Text>
               <Text style={[s.emptyHint, { color: theme.textMuted }]}>
-                Únete a un grupo de estudio y los chats aparecerán aquí.
+                {t("messagesEmptyHint")}
               </Text>
             </View>
           }

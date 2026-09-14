@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  BackHandler,
 } from "react-native";
 import Text from "../../components/AppText";
 import AppButton from "../../components/AppButton";
@@ -33,6 +34,7 @@ import {
   EyeOff,
   Accessibility as AccessibilityIcon,
   Crown,
+  ShieldCheck,
 } from "lucide-react-native";
 import PlanMenu from "../../components/PlanMenu";
 import AccessibilityMenu from "../../components/AccessibilityMenu";
@@ -84,8 +86,49 @@ export default function ProfileScreen() {
   const currentPlan = userProfile?.plan || "free";
   const currentBilling = userProfile?.planBilling || "monthly";
   const isPro = currentPlan === "personal";
+  const twoFactorEnabled = !!userProfile?.twoFactorEnabled;
 
   const { t } = useAccessibility();
+
+  const handleToggle2fa = useCallback(() => {
+    if (!user?.uid) return;
+
+    if (twoFactorEnabled) {
+      Alert.alert(t("twoFactorDisableTitle"), t("twoFactorDisableMsg"), [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("twoFactorDisableAction"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await updateUserProfile(user.uid, { twoFactorEnabled: false });
+              await refreshProfile();
+              Alert.alert(t("success"), t("twoFactorDisabledOk"));
+            } catch (e) {
+              Alert.alert(t("error"), t("cannotUpdate"));
+            }
+          },
+        },
+      ]);
+      return;
+    }
+
+    Alert.alert(t("twoFactorEnableTitle"), t("twoFactorEnableMsg"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("twoFactorEnableAction"),
+        onPress: async () => {
+          try {
+            await updateUserProfile(user.uid, { twoFactorEnabled: true });
+            await refreshProfile();
+            Alert.alert(t("success"), t("twoFactorEnabledOk"));
+          } catch (e) {
+            Alert.alert(t("error"), t("cannotUpdate"));
+          }
+        },
+      },
+    ]);
+  }, [user?.uid, twoFactorEnabled, t, refreshProfile]);
 
   // Al volver a la pestaña Perfil, refrescar Firestore (p. ej. cambios desde otro dispositivo)
   useFocusEffect(
@@ -139,6 +182,29 @@ export default function ProfileScreen() {
   const closePlanMenu = useCallback(() => setIsPlanMenuOpen(false), []);
 
   const { setIsMenuOpen } = useMenuOpen();
+
+  // Atrás del sistema: salir de editar perfil / cambiar contraseña
+  // (no saltar al tab principal de la app).
+  useFocusEffect(
+    useCallback(() => {
+      const onHardwareBack = () => {
+        if (isPlanMenuOpen) {
+          setIsPlanMenuOpen(false);
+          return true;
+        }
+        if (subView === "editProfile" || subView === "password") {
+          setSubView("main");
+          return true;
+        }
+        return false;
+      };
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onHardwareBack,
+      );
+      return () => sub.remove();
+    }, [subView, isPlanMenuOpen]),
+  );
 
   // Sincronizar estado local cuando cambia userProfile,
   // pero sin pisar lo que el usuario escribe en el formulario de edición.
@@ -265,8 +331,8 @@ export default function ProfileScreen() {
         >
           <AppButton
             onPress={() => setSubView("main")}
-            accessibilityLabel="Volver"
-            accessibilityHint="Doble toque para regresar al perfil"
+            accessibilityLabel={t("back")}
+            accessibilityHint={t("backToProfileHint")}
           >
             <ChevronLeft color="#C7D2FE" size={24} />
           </AppButton>
@@ -280,11 +346,11 @@ export default function ProfileScreen() {
             ]}
           >
             <Text style={[s.formDesc, { color: theme.textSecondary }]}>
-              Actualiza tu nombre y número de celular.
+              {t("updatePersonalInfo")}
             </Text>
             <View>
               <Text style={[s.label, { color: theme.textSecondary }]}>
-                NOMBRE COMPLETO
+                {t("nameComplete")}
               </Text>
               <TextInput
                 style={[
@@ -302,8 +368,8 @@ export default function ProfileScreen() {
                 autoCapitalize="words"
                 autoCorrect={false}
                 placeholderTextColor={theme.textMuted}
-                accessibilityLabel="Nombre completo"
-                accessibilityHint="Ingresa tu nombre completo"
+                accessibilityLabel={t("fullName")}
+                accessibilityHint={t("fullNameHint")}
               />
             </View>
             <View>
@@ -326,8 +392,8 @@ export default function ProfileScreen() {
                 keyboardType="phone-pad"
                 maxLength={11}
                 placeholderTextColor={theme.textMuted}
-                accessibilityLabel="Número de celular"
-                accessibilityHint="Ingresa tu número de teléfono"
+                accessibilityLabel={t("phoneNumber")}
+                accessibilityHint={t("phoneHint")}
               />
             </View>
             <View>
@@ -346,8 +412,8 @@ export default function ProfileScreen() {
                 ]}
                 value={userProfile?.email || ""}
                 editable={false}
-                accessibilityLabel="Correo electrónico"
-                accessibilityHint="El correo no se puede modificar"
+                accessibilityLabel={t("emailLabel")}
+                accessibilityHint={t("emailCannotEditHint")}
               />
               <Text style={[s.hint, { color: theme.textMuted }]}>
                 {t("emailCannotChange")}
@@ -383,8 +449,8 @@ export default function ProfileScreen() {
         >
           <AppButton
             onPress={() => setSubView("main")}
-            accessibilityLabel="Volver"
-            accessibilityHint="Doble toque para regresar al perfil"
+            accessibilityLabel={t("back")}
+            accessibilityHint={t("backToProfileHint")}
           >
             <ChevronLeft color="#C7D2FE" size={24} />
           </AppButton>
@@ -398,7 +464,7 @@ export default function ProfileScreen() {
             ]}
           >
             <Text style={[s.formDesc, { color: theme.textSecondary }]}>
-              Ingresa tu contraseña actual y la nueva.
+              {t("enterCurrentNew")}
             </Text>
             <View>
               <Text style={[s.label, { color: theme.textSecondary }]}>
@@ -720,6 +786,40 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <ChevronRight color={theme.textMuted} size={16} />
+            </AppButton>
+            <View style={[s.divider, { backgroundColor: theme.divider }]} />
+            <AppButton
+              style={s.settingsRow}
+              onPress={handleToggle2fa}
+              activeOpacity={0.7}
+              accessibilityLabel={t("twoFactorTitle")}
+              accessibilityHint={t("twoFactorHint")}
+              accessibilityState={{ checked: twoFactorEnabled }}
+            >
+              <View style={s.settingsLeft}>
+                <View
+                  style={[
+                    s.settingsIcon,
+                    { backgroundColor: isDark ? "#312E81" : "#EEF2FF" },
+                  ]}
+                >
+                  <ShieldCheck color="#4F46E5" size={16} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.settingsLabel, { color: theme.text }]}>
+                    {t("twoFactorTitle")}
+                  </Text>
+                  <Text style={s.settingsHint}>{t("twoFactorHint")}</Text>
+                </View>
+              </View>
+              <View style={[s.toggle, !twoFactorEnabled && s.toggleOff]}>
+                <View
+                  style={[
+                    s.toggleKnob,
+                    !twoFactorEnabled && s.toggleKnobOff,
+                  ]}
+                />
+              </View>
             </AppButton>
             <View style={[s.divider, { backgroundColor: theme.divider }]} />
             <AppButton
